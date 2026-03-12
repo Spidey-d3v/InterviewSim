@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useVisionSession } from '../hooks/useVisionSession';
 import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
+import { useLiveKitInterview } from '../hooks/useLiveKitInterview';
 import CalibrationFlow from './CalibrationFlow';
 
 // ---------------------------------------------------------------------------
@@ -31,13 +32,24 @@ export default function InterviewRoom() {
   const [recordingTime, setRecordingTime] = useState(0);
   const [showCalibration, setShowCalibration] = useState(true);
   const [interviewStarted, setInterviewStarted] = useState(false);
-  const [visionSessionData, setVisionSessionData] = useState<any>(null);
   const [showResults, setShowResults] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
 
   const [questionIndex, setQuestionIndex] = useState(0);
   const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const livekitDefaultUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL ?? 'ws://localhost:7880';
+  const livekitDefaultToken = process.env.NEXT_PUBLIC_LIVEKIT_TOKEN ?? '';
+
+  const {
+    isConnected: livekitConnected,
+    isConnecting: livekitConnecting,
+    participants: livekitParticipants,
+    error: livekitError,
+    connect: connectLiveKit,
+    disconnect: disconnectLiveKit,
+  } = useLiveKitInterview();
 
   // Vision.py session hook
   const {
@@ -134,7 +146,6 @@ export default function InterviewRoom() {
   useEffect(() => {
     if (chunkResults.length > 0 && !isChunkRecording && interviewStarted) {
       console.log('📊 Got chunk results:', chunkResults.length);
-      setVisionSessionData({ chunkResults, sessionData });
     }
   }, [chunkResults, isChunkRecording, interviewStarted, sessionData]);
 
@@ -165,7 +176,6 @@ export default function InterviewRoom() {
         questionTimerRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewStarted, isChunkRecording]);
 
   const enterFullscreen = async () => {
@@ -210,6 +220,15 @@ export default function InterviewRoom() {
         }
       });
     }
+
+    if (!livekitConnected && livekitDefaultToken) {
+      connectLiveKit({
+        url: livekitDefaultUrl,
+        token: livekitDefaultToken,
+        withAudio: true,
+        withVideo: true,
+      });
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -228,9 +247,12 @@ export default function InterviewRoom() {
       stopRecorder();
     }
 
+    if (livekitConnected) {
+      await disconnectLiveKit();
+    }
+
     // Always show results modal if interview was started
     if (interviewStarted) {
-      setVisionSessionData({ chunkResults, sessionData });
       setShowResults(true);
     } else {
       setTimeout(() => {
@@ -308,6 +330,24 @@ export default function InterviewRoom() {
             <div className="flex items-center gap-2 text-sm">
               <div className="w-2 h-2 bg-green-400 rounded-full" />
               <span className="text-green-400">Vision Server</span>
+            </div>
+          )}
+          {livekitConnected && (
+            <div className="flex items-center gap-2 text-sm">
+              <div className="w-2 h-2 bg-cyan-400 rounded-full" />
+              <span className="text-cyan-400">
+                LiveKit ({livekitParticipants.length} remote)
+              </span>
+            </div>
+          )}
+          {livekitConnecting && !livekitConnected && (
+            <div className="px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/30 rounded-lg text-xs text-cyan-300">
+              Connecting LiveKit...
+            </div>
+          )}
+          {livekitError && (
+            <div className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs text-orange-300">
+              LiveKit Error
             </div>
           )}
           {/* Permission Status */}
@@ -606,6 +646,31 @@ export default function InterviewRoom() {
 
       {/* Control Bar */}
       <div className="px-6 py-6 border-t border-white/10 flex items-center justify-center gap-4">
+        <button
+          onClick={async () => {
+            if (livekitConnected) {
+              await disconnectLiveKit();
+              return;
+            }
+
+            const token = livekitDefaultToken || window.prompt('Paste LiveKit access token');
+            if (!token) return;
+
+            await connectLiveKit({
+              url: livekitDefaultUrl,
+              token,
+              withAudio: true,
+              withVideo: true,
+            });
+          }}
+          className={`px-4 py-2 rounded-full border transition-all text-sm font-medium ${
+            livekitConnected
+              ? 'bg-cyan-500/20 border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/30'
+              : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+          }`}
+        >
+          {livekitConnected ? 'Leave LiveKit' : livekitConnecting ? 'Connecting...' : 'Join LiveKit'}
+        </button>
         
         {/* Recording / Processing Indicator */}
         {isChunkRecording && (

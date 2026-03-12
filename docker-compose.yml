@@ -1,0 +1,61 @@
+services:
+  # Redis - shared by LiveKit (signaling) and Celery (job queue)
+  redis:
+    image: redis:7-alpine
+    container_name: interview-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 4gb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - interview-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # LiveKit Server - WebRTC media server
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: interview-livekit
+    ports:
+      # WebRTC signaling
+      - "7880:7880"
+      # TURN server (optional)
+      - "7881:7881"
+      # RTC port range for media
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./livekit.yaml:/livekit.yaml:ro
+    command: --config /livekit.yaml
+    environment:
+      # Override Redis connection if needed
+      # LIVEKIT_REDIS_ADDRESS: redis:6379
+      
+      # Set production API secret (REPLACE WITH SECURE VALUE!)
+      LIVEKIT_KEYS: "devkey: APISECRETdevkey1234567890ABCDEFG"
+      
+      # Logging
+      LIVEKIT_LOG_LEVEL: info
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - interview-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7880"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+networks:
+  interview-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

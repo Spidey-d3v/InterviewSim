@@ -1,0 +1,86 @@
+# LiveKit Server Configuration for Interview Platform
+# Self-hosted deployment with Redis for scaling
+
+port: 7880
+bind_addresses:
+  - "0.0.0.0"
+
+# Redis for distributed signaling (shared with Celery)
+redis:
+  address: redis:6379
+  db: 0
+  # username: ""
+  # password: ""  # Set via LIVEKIT_REDIS_PASSWORD env var in production
+
+# RTC configuration - WebRTC transport
+rtc:
+  # Port range for UDP (RTP/RTCP)
+  port_range_start: 50000
+  port_range_end: 60000
+  
+  # Use mDNS for local development, disable in production
+  use_external_ip: true
+  
+  # STUN servers for NAT traversal (use LiveKit's public STUN by default)
+  stun_servers:
+    - stun.l.google.com:19302
+    - stun1.l.google.com:19302
+  
+  # TURN server configuration (optional - LiveKit has built-in TURN)
+  # turn_servers:
+  #   - host: turn.example.com
+  #     port: 3478
+  #     protocol: udp
+  #     username: turnuser
+  #     credential: turnpass
+
+# API keys for server-to-server auth (generate secure keys in production!)
+keys:
+  # Dev key (32+ characters required)
+  devkey: APISECRETdevkey1234567890ABCDEFG
+  # Add more keys for multi-tenant or per-environment access
+  # prodkey: APISECRETprodkey987654321
+
+# Room settings
+room:
+  # Auto-create rooms when clients join (good for interview flow)
+  auto_create: true
+  
+  # Max participants per room (1 = solo interview, 2 = interviewer + candidate)
+  max_participants: 2
+  
+  # Empty room timeout - cleanup after last participant leaves (seconds)
+  empty_timeout: 60
+  
+  # Allow reconnection within this window if client disconnects (seconds)
+  departure_timeout: 20
+
+# Logging
+logging:
+  level: info
+  # Set to debug for development troubleshooting
+  # level: debug
+
+# Region (for multi-region deployments - single region for now)
+region: local
+
+# Limit client connections to prevent DOS
+limit:
+  # Max bytes per second per participant
+  bytes_per_sec: 5_000_000  # 5 MB/s (enough for 1080p video)
+
+# Webhook for events (optional - useful for analytics/logging)
+# webhook:
+#   urls:
+#     - http://backend:8000/webhooks/livekit
+#   api_key: webhook_secret_key
+
+# Development-specific settings
+# Turn off in production for better security
+# turn:
+#   enabled: true
+#   external_tls: false
+
+# NodeSelector for Kubernetes (N/A for Docker Compose single-server)
+# node_selector:
+#   type: livekit
