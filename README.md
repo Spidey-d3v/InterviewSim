@@ -73,8 +73,7 @@ This repository does not use one single Python package file for every service. T
 The quickest way to start everything on Windows is:
 
 ```powershell
-.
-start-system.ps1
+.\start-system.ps1
 ```
 
 That script starts:
