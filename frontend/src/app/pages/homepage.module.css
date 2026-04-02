@@ -1,0 +1,81 @@
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animateFadeIn {
+  animation: fade-in 0.8s ease-out;
+}
+
+.animateFadeInUp {
+  animation: fade-in-up 0.8s ease-out;
+  animation-fill-mode: both;
+}
+
+.animateFloat {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animatePulseSlow {
+  animation: pulse-slow 2s ease-in-out infinite;
+}
+
+.animateSlideIn {
+  animation: slide-in 0.5s ease-out;
+  animation-fill-mode: both;
+}
+
+.fadeInSection {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+}
+
+.fadeInSection.animateIn {
+  opacity: 1;
+  transform: translateY(0);
+}

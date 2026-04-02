@@ -7,6 +7,8 @@ import sounddevice as sd
 from scipy.io.wavfile import write
 import soundfile as sf
 from scipy.stats import percentileofscore
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from src.model.voice_wav2vec_model import VoiceWav2VecModel
 
@@ -127,17 +129,35 @@ def sliding_window_analysis(model, device, waveform,
 
 def extract_pitch_energy(path):
     wav, sr = sf.read(path, dtype="float32")
+
     if wav.ndim == 2:
         wav = wav.mean(axis=1)
 
-    energy = np.sqrt(np.convolve(wav**2,
-                                 np.ones(400)/400,
-                                 mode='same'))
+    frame_size = 400      # 25ms
+    hop_size = 160        # 10ms
 
-    # simple pitch proxy via zero-crossing
-    zcr = np.abs(np.diff(np.sign(wav))).astype(float)
+    energies = []
+    pitches = []
 
-    return energy, zcr
+    for i in range(0, len(wav) - frame_size, hop_size):
+        frame = wav[i:i+frame_size]
+
+        # Energy
+        energy = np.sqrt(np.mean(frame**2))
+        energies.append(energy)
+
+        # Simple pitch proxy via autocorrelation peak
+        frame = frame - np.mean(frame)
+        corr = np.correlate(frame, frame, mode='full')
+        corr = corr[len(corr)//2:]
+
+        # Ignore very small lags (noise)
+        lag = np.argmax(corr[20:200]) + 20
+        pitch = sr / lag if lag > 0 else 0
+        pitches.append(pitch)
+
+    return np.array(energies), np.array(pitches)
+
 
 
 # -------------------------
@@ -146,23 +166,29 @@ def extract_pitch_energy(path):
 
 def plot_single_report(score, percentile,
                        times, window_scores,
-                       energy, pitch_proxy):
+                       energy, pitch):
 
-    fig, axs = plt.subplots(3, 1, figsize=(12, 10))
+    fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
     axs[0].plot(times, window_scores, linewidth=2)
     axs[0].set_title("Speaking Skills (Sliding Window)")
+    axs[0].set_xlabel("Time (seconds)")
+    axs[0].set_ylabel("Score")
+    axs[0].grid(True)
 
-    axs[1].plot(energy, linewidth=1.2)
-    axs[1].set_title("Energy (Loudness Proxy)")
+    axs[1].plot(energy, linewidth=1)
+    axs[1].set_title("Energy (RMS)")
+    axs[1].set_xlabel("Frame Index")
+    axs[1].set_ylabel("Energy")
+    axs[1].grid(True)
 
-    axs[2].plot(pitch_proxy, linewidth=1.2)
-    axs[2].set_title("Pitch Proxy (ZCR-based)")
+    axs[2].plot(pitch, linewidth=1)
+    axs[2].set_title("Pitch (Autocorrelation Estimate)")
+    axs[2].set_xlabel("Frame Index")
+    axs[2].set_ylabel("Frequency (Hz)")
+    axs[2].grid(True)
 
-    for ax in axs:
-        ax.grid(True)
-
-    plt.tight_layout()
+    plt.subplots_adjust(hspace=0.5)
     plt.show()
 
     print("\nOverall Speaking Skills Score:", round(score, 4))
@@ -171,6 +197,7 @@ def plot_single_report(score, percentile,
     else:
         print("Percentile vs Dataset: N/A (no reference dataset loaded)")
     print()
+
 
 
 def plot_comparison_report(r1, r2):

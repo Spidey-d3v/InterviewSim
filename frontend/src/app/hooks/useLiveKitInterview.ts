@@ -74,7 +74,7 @@ export function useLiveKitInterview() {
     }));
   }, []);
 
-  const connect = useCallback(async (params: ConnectParams) => {
+  const connect = useCallback(async (params: ConnectParams, retries = 3) => {
     setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
     const room = new Room({
@@ -92,18 +92,23 @@ export function useLiveKitInterview() {
     roomRef.current = room;
 
     room.on(RoomEvent.ConnectionStateChanged, () => {
+      console.log('[LiveKit] Connection state:', room.state);
       _syncConnection();
       if (room.state === ConnectionState.Disconnected) {
         setState((prev) => ({ ...prev, isConnecting: false }));
       }
     });
 
-    room.on(RoomEvent.ParticipantConnected, () => _syncParticipants());
+    room.on(RoomEvent.ParticipantConnected, (p) => {
+      console.log('[LiveKit] Participant connected:', p.name);
+      _syncParticipants();
+    });
     room.on(RoomEvent.ParticipantDisconnected, () => _syncParticipants());
     room.on(RoomEvent.TrackSubscribed, () => {
       _syncParticipants();
     });
     room.on(RoomEvent.Disconnected, () => {
+      console.log('[LiveKit] Room disconnected');
       setState((prev) => ({
         ...prev,
         isConnecting: false,
@@ -113,16 +118,28 @@ export function useLiveKitInterview() {
     });
 
     try {
+      console.log('[LiveKit] Connecting to:', params.url, 'with token:', params.token.substring(0, 20) + '...');
       await room.connect(params.url, params.token);
+      console.log('[LiveKit] Connected successfully');
 
       if (params.withAudio ?? true) {
-        const mic = await createLocalAudioTrack();
-        await room.localParticipant.publishTrack(mic);
+        try {
+          const mic = await createLocalAudioTrack();
+          await room.localParticipant.publishTrack(mic);
+          console.log('[LiveKit] Audio track published');
+        } catch (err) {
+          console.warn('[LiveKit] Audio track failed:', err instanceof Error ? err.message : err);
+        }
       }
 
       if (params.withVideo ?? true) {
-        const cam = await createLocalVideoTrack();
-        await room.localParticipant.publishTrack(cam);
+        try {
+          const cam = await createLocalVideoTrack();
+          await room.localParticipant.publishTrack(cam);
+          console.log('[LiveKit] Video track published');
+        } catch (err) {
+          console.warn('[LiveKit] Video track failed:', err instanceof Error ? err.message : err);
+        }
       }
 
       _syncConnection();
@@ -137,9 +154,21 @@ export function useLiveKitInterview() {
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to connect to LiveKit';
+      console.error('[LiveKit] Connection error:', message, 'Retries left:', retries - 1);
+      
       room.removeAllListeners();
       room.disconnect();
       roomRef.current = null;
+
+      // Retry logic with exponential backoff
+      if (retries > 1) {
+        const delay = Math.pow(2, 4 - retries) * 1000; // 2s, 4s, 8s
+        console.log('[LiveKit] Retrying in', delay, 'ms...');
+        setTimeout(() => {
+          connect(params, retries - 1);
+        }, delay);
+        return;
+      }
 
       setState((prev) => ({
         ...prev,

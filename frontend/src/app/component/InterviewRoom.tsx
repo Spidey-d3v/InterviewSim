@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useVisionSession } from '../hooks/useVisionSession';
 import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
 import { useLiveKitInterview } from '../hooks/useLiveKitInterview';
+import { LiveKitDebugPanel } from './LiveKitDebugPanel';
 import CalibrationFlow from './CalibrationFlow';
 
 // ---------------------------------------------------------------------------
@@ -40,7 +41,6 @@ export default function InterviewRoom() {
   const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const livekitDefaultUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL ?? 'ws://localhost:7880';
-  const livekitDefaultToken = process.env.NEXT_PUBLIC_LIVEKIT_TOKEN ?? '';
 
   const {
     isConnected: livekitConnected,
@@ -221,13 +221,20 @@ export default function InterviewRoom() {
       });
     }
 
-    if (!livekitConnected && livekitDefaultToken) {
-      connectLiveKit({
-        url: livekitDefaultUrl,
-        token: livekitDefaultToken,
-        withAudio: true,
-        withVideo: true,
-      });
+    if (!livekitConnected) {
+      fetch('/api/livekit-token')
+        .then((r) => r.json())
+        .then(({ token, url }) => {
+          if (token) {
+            connectLiveKit({
+              url: url ?? livekitDefaultUrl,
+              token,
+              withAudio: true,
+              withVideo: true,
+            });
+          }
+        })
+        .catch((err) => console.warn('[LiveKit] token fetch failed:', err));
     }
   };
 
@@ -346,8 +353,8 @@ export default function InterviewRoom() {
             </div>
           )}
           {livekitError && (
-            <div className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs text-orange-300">
-              LiveKit Error
+            <div className="px-3 py-1.5 bg-orange-500/20 border border-orange-500/30 rounded-lg text-xs text-orange-300 max-w-sm">
+              ⚠️ {livekitError}
             </div>
           )}
           {/* Permission Status */}
@@ -652,16 +659,14 @@ export default function InterviewRoom() {
               await disconnectLiveKit();
               return;
             }
-
-            const token = livekitDefaultToken || window.prompt('Paste LiveKit access token');
-            if (!token) return;
-
-            await connectLiveKit({
-              url: livekitDefaultUrl,
-              token,
-              withAudio: true,
-              withVideo: true,
-            });
+            try {
+              const res = await fetch('/api/livekit-token');
+              const { token, url } = await res.json();
+              if (!token) return;
+              await connectLiveKit({ url: url ?? livekitDefaultUrl, token, withAudio: true, withVideo: true });
+            } catch (err) {
+              console.error('[LiveKit] manual connect failed:', err);
+            }
           }}
           className={`px-4 py-2 rounded-full border transition-all text-sm font-medium ${
             livekitConnected
@@ -885,6 +890,9 @@ export default function InterviewRoom() {
           </div>
         </div>
       )}
+
+      {/* LiveKit Debug Panel */}
+      <LiveKitDebugPanel />
     </div>
   );
 }
