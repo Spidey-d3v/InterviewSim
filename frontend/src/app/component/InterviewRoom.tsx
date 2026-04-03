@@ -264,7 +264,7 @@ export default function InterviewRoom() {
     } else {
       setTimeout(() => {
         releaseStream();
-        router.push('/');
+        router.push('/homepage');
       }, 500);
     }
   };
@@ -848,7 +848,7 @@ export default function InterviewRoom() {
                     if (!confirm(`${pendingChunks} chunk${pendingChunks !== 1 ? 's are' : ' is'} still processing. Results will be lost. Leave anyway?`)) return;
                   }
                   releaseStream();
-                  router.push('/');
+                  router.push('/front/homepage');
                 }}
                 className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
               >

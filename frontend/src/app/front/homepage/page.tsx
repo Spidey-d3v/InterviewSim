@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { UploadCloud, FileText, X, CheckCircle, Loader2 } from 'lucide-react';
+import ResumeUploadModal from '../../component/ResumeUploadModal'; 
 
 function useMounted() {
   const [mounted, setMounted] = useState(false);
@@ -12,6 +14,7 @@ function useMounted() {
 export default function HomePage() { 
   const router = useRouter();
   const mounted = useMounted();
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mlBars, setMlBars] = useState<Array<{ width: number; value: number }>>([]);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -93,7 +96,7 @@ export default function HomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-hidden" suppressHydrationWarning>
+    <div className="min-h-screen bg-[#0a0a0f] text-white overflow-visible" suppressHydrationWarning>
       {/* Animated Grid Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,black,transparent)]" />
@@ -128,6 +131,13 @@ export default function HomePage() {
           onClick={() => router.push('/auth/login')}
           className="text-sm text-gray-400 hover:text-white transition-colors">
             Log in
+          </button>
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="px-4 py-2 bg-transparent border border-gray-700 text-white text-sm font-medium rounded-lg hover:border-gray-500 transition-all flex items-center gap-2"
+          >
+            <UploadCloud size={16} />
+            Upload Resume
           </button>
           <button 
             onClick={() => router.push('/front/interview')}
@@ -439,6 +449,10 @@ export default function HomePage() {
         </div>
       </footer>
 
+      {/* Modal Portal */}
+      {isModalOpen && (
+        <ResumeUploadModal onClose={() => setIsModalOpen(false)} />
+      )}
     </div>
   );
 }
