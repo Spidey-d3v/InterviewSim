@@ -8,7 +8,7 @@ export default function Page() {
 
   useEffect(() => {
     // Redirect to login on first load
-    router.push('/login');
+    router.push('/auth/login');
   }, [router]);
 
   return null;

@@ -3,18 +3,47 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { createClient } from "@/utils/supabase";
 
 export default function Login() {
   const router = useRouter();
+  const supabase = createClient();
+
+  // UI State
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  // Form Data State
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setErrorMsg("");
 
-    // Just redirect immediately - no validation, no logging
-    router.push("/homepage");
+    try {
+      // Authenticate the user with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Success! Redirect to the homepage or dashboard
+      if (data.session) {
+        router.push("/front/homepage");
+      }
+    } catch (error: any) {
+      console.error("Login failed:", error.message);
+      setErrorMsg("Invalid email or password. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -43,6 +72,13 @@ export default function Login() {
             </p>
           </div>
 
+          {/* Error Banner */}
+          {errorMsg && (
+            <div className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-500 text-sm text-center">
+              {errorMsg}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-white mb-2">
@@ -53,6 +89,9 @@ export default function Login() {
                 <input
                   id="email"
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
                   placeholder="name@example.com"
                   className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 />
@@ -73,6 +112,9 @@ export default function Login() {
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
                   placeholder="••••••••"
                   className="w-full pl-10 pr-10 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
                 />
@@ -111,16 +153,19 @@ export default function Login() {
             </div>
             <div className="relative flex justify-center text-sm">
               <span className="px-2 bg-gradient-to-br from-purple-500/5 to-pink-500/5 text-gray-500">
-                New to InterviewAR?
+                {/* New to InterviewAR? */}
               </span>
             </div>
           </div>
 
           <p className="text-center text-sm text-gray-400">
             Don't have an account?{" "}
-            <a href="#" className="text-purple-400 hover:text-purple-300 font-semibold transition-colors">
+            <button
+              onClick={() => router.push('/auth/signup')}
+              className="text-purple-400 hover:text-purple-300 font-semibold transition-colors bg-none border-none cursor-pointer"
+            >
               Create one now
-            </a>
+            </button>
           </p>
         </div>
 
