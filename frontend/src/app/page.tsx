@@ -1,7 +1,15 @@
 'use client';
 
-import HomePage from './pages/homepage';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export default function Page() {
-  return <HomePage />;
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redirect to login on first load
+    router.push('/login');
+  }, [router]);
+
+  return null;
 }

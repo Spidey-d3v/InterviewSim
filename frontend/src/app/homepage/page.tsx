@@ -9,7 +9,7 @@ function useMounted() {
   return mounted;
 }
 
-export default function HomePage() {
+export default function HomePage() { 
   const router = useRouter();
   const mounted = useMounted();
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -124,7 +124,9 @@ export default function HomePage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button className="text-sm text-gray-400 hover:text-white transition-colors">
+          <button 
+          onClick={() => router.push('/login')}
+          className="text-sm text-gray-400 hover:text-white transition-colors">
             Log in
           </button>
           <button 

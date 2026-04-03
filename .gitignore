@@ -14,3 +14,7 @@ audio/
 converted_*.wav
 *.safetensors
 *.pt
+
+# Environment variables
+.env.local
+.env
