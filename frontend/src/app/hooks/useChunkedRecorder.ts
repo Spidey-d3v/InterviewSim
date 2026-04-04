@@ -19,7 +19,6 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
   const chunkIndexRef = useRef(0);
 
   const requestPermissions = useCallback(async (): Promise<MediaStream | null> => {
@@ -40,37 +39,10 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
     }
   }, [onError]);
 
-  const startRecording = useCallback((mediaStream?: MediaStream) => {
-    const s = mediaStream || stream;
-    if (!s) return;
-    if (recorderRef.current) return;
-
-    const recorder = new MediaRecorder(s, { mimeType: MIME_TYPE });
-
-    recorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) {
-        chunksRef.current.push(e.data);
-      }
-    };
-
-    recorder.start(500);
-    recorderRef.current = recorder;
-    setIsRecording(true);
-    console.log("🎬 Rolling recorder started");
-  }, [stream]);
-
-  const flushChunk = useCallback(async () => {
-    if (chunksRef.current.length === 0) return;
-
-    const idx = chunkIndexRef.current++;
-    setChunkCount(idx + 1);
+  const uploadBlob = useCallback(async (blob: Blob, index: number) => {
     setPendingUploads((p) => p + 1);
-
-    const blob = new Blob(chunksRef.current, { type: MIME_TYPE });
-    chunksRef.current = [];
-
     const formData = new FormData();
-    formData.append("file", blob, `turn_${idx}.webm`);
+    formData.append("file", blob, `turn_${index}.webm`);
 
     try {
       const res = await fetch(`${VISION_SERVER}/upload_video`, {
@@ -78,19 +50,61 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
         body: formData,
       });
       const data = await res.json();
-      setPendingUploads((p) => p - 1);
-      onChunkReady(data.video_path, `turn_${idx}`, idx);
+      onChunkReady(data.video_path, `turn_${index}`, index);
     } catch (err) {
-      setPendingUploads((p) => p - 1);
+      console.error("❌ Upload failed:", err);
       onError?.(`Upload failed: ${err}`);
+    } finally {
+      setPendingUploads((p) => p - 1);
     }
   }, [onChunkReady, onError]);
 
+  const startRecording = useCallback((mediaStream?: MediaStream) => {
+    const s = mediaStream || stream;
+    if (!s) return;
+    
+    // If already recording, don't restart unless explicitly requested via flush
+    if (recorderRef.current && recorderRef.current.state === "recording") return;
+
+    const recorder = new MediaRecorder(s, { mimeType: MIME_TYPE });
+
+    recorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) {
+        const idx = chunkIndexRef.current++;
+        setChunkCount(idx + 1);
+        uploadBlob(e.data, idx);
+      }
+    };
+
+    recorder.start(); // No timeslice -> fires only on stop()
+    recorderRef.current = recorder;
+    setIsRecording(true);
+    console.log("🎬 Standalone recorder started (header per chunk mode)");
+  }, [stream, uploadBlob]);
+
+  const flushChunk = useCallback(() => {
+    if (!recorderRef.current || recorderRef.current.state !== "recording") {
+      console.warn("⚠️ flushChunk called but recorder is not active");
+      return;
+    }
+
+    console.log("🔄 Flushing current chunk (restarting recorder)...");
+    
+    // 1. Stop current recorder (triggers ondataavailable with full file + header)
+    recorderRef.current.stop();
+    
+    // 2. Immediately start a new recorder for the next turn
+    // (We don't need to wait for ondataavailable because it's async)
+    startRecording();
+  }, [startRecording]);
+
   const stopRecording = useCallback(() => {
-    recorderRef.current?.stop();
+    if (recorderRef.current && recorderRef.current.state === "recording") {
+      recorderRef.current.stop();
+    }
     recorderRef.current = null;
-    chunksRef.current = [];
     setIsRecording(false);
+    console.log("🛑 Recorder stopped");
   }, []);
 
   const releaseStream = useCallback(() => {

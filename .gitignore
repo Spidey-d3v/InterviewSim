@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 Vision/data/
 
+frontend/node_modules
+
 # Audio
 *.wav
 *.mp4

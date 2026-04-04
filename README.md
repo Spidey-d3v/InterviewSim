@@ -1,203 +1,235 @@
-# InterviewAR
+<div align="center">
 
-Multi-service interview intelligence platform for live, recorded, and chunked interview analysis.
+<br/>
 
-The workspace combines a Next.js frontend, a Redis/Celery backend, a FastAPI inference service, a LiveKit media stack, and two model-focused subprojects for video and voice evaluation. The system is built to capture camera and microphone input, split recordings into chunks, run ML analysis, and surface live feedback in the browser.
-
-## System Overview
-
-```mermaid
-flowchart LR
-  U[Browser / Next.js Frontend] --> L[LiveKit Server]
-  U --> V[Vision Server]
-  U --> B[Backend / Celery]
-  B --> I[Inference Service]
-  I --> M[Vision + Voice + Video Models]
-  V --> M
-  L --> W[LiveKit Worker]
-  W --> V
-  R[(Redis)] <---> B
-  R <---> L
+```
+██╗      █████╗ ████████╗████████╗██╗ ██████╗███████╗
+██║     ██╔══██╗╚══██╔══╝╚══██╔══╝██║██╔════╝██╔════╝
+██║     ███████║   ██║      ██║   ██║██║     █████╗
+██║     ██╔══██║   ██║      ██║   ██║██║     ██╔══╝
+███████╗██║  ██║   ██║      ██║   ██║╚██████╗███████╗
+╚══════╝╚═╝  ╚═╝   ╚═╝      ╚═╝   ╚═╝ ╚═════╝╚══════╝
 ```
 
-## Tech Stack
+### **AI-Powered Interview Intelligence Platform**
 
-- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS v4, LiveKit client, GSAP, Lucide icons.
-- Backend orchestration: Python, Redis, Celery.
-- Inference API: FastAPI, Pydantic, asyncio.
-- Vision and ML runtime: OpenCV, MediaPipe, PyTorch, Hugging Face Transformers, soundfile, ffmpeg.
-- Media infrastructure: Docker Compose, LiveKit server, LiveKit Agents worker.
+*Multimodal • Real-time • Production-Grade*
 
-## Setup
+<br/>
 
-### 1. Prerequisites
+[![Stack](https://img.shields.io/badge/Next.js_16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org)
+[![Stack](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Stack](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org)
+[![Stack](https://img.shields.io/badge/LiveKit-000000?style=for-the-badge&logo=webrtc&logoColor=white)](https://livekit.io)
 
-- Windows with PowerShell.
-- Docker Desktop running.
-- Node.js 20+ for the frontend.
-- A Python conda environment that matches the scripts, with `pupil310` as the default in `start-system.ps1`.
-- `ffmpeg` on `PATH`, or set `FFMPEG_PATH` for the vision pipeline.
-- Optional GPU/CUDA support for faster PyTorch inference.
+[![AI](https://img.shields.io/badge/Whisper-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/research/whisper)
+[![AI](https://img.shields.io/badge/Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://deepmind.google/technologies/gemini)
+[![AI](https://img.shields.io/badge/Wav2Vec2-FFD700?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co)
+[![AI](https://img.shields.io/badge/VideoMAE-FF6F00?style=for-the-badge&logo=pytorch&logoColor=white)](https://github.com/MCG-NJU/VideoMAE)
 
-### 2. Environment Variables
+[![DB](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io)
+[![DB](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com)
+[![License](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](./LICENSE)
 
-Copy the root sample file and fill in the values for your machine:
+<br/>
 
-```bash
-copy .env.example .env
+</div>
+
+---
+
+## ✦ Overview
+
+**Lattice** is a production-grade AI platform that conducts and evaluates technical interviews in real time. It unifies a low-latency **Voice Agent**, **Computer Vision**, and **Deep Audio Analysis** into a single end-to-end pipeline — turning a raw interview session into a structured, scored report.
+
+> Candidates are assessed across **12 behavioral dimensions** using a tri-modal signal: what they *say*, how they *sound*, and how they *appear*.
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         🌐  FRONTEND                             │
+│          Next.js 16  ·  Gaze Hook  ·  Chunked Media Recorder     │
+└───────────────────────┬──────────────────────────────────────────┘
+                        │  WebRTC (LiveKit SFU)
+          ┌─────────────▼──────────────┐
+          │      📡  TRANSPORT         │
+          │   LiveKit Server + Redis   │
+          └──────┬───────────┬─────────┘
+                 │           │
+    ┌────────────▼──┐   ┌────▼──────────────────┐
+    │  🧠  convFlow │   │   🔍  ANALYSIS ENGINES │
+    │               │   │                        │
+    │  Whisper STT  │   │  Vision  · VideoMAE    │
+    │  LangGraph    │   │          · MediaPipe   │
+    │  Gemini LLM   │   │  Voice   · Wav2Vec2    │
+    │  Kokoro TTS   │   │          · BiLSTM      │
+    └───────────────┘   └────────────────────────┘
+                 │           │
+          ┌──────▼───────────▼─────────┐
+          │      💾  REDIS STORE        │
+          │  Scores · Signals · State  │
+          └────────────────────────────┘
 ```
 
-The frontend also expects a matching `frontend/.env.local` when you run it directly. The LiveKit diagnostics script checks for:
+---
 
-- `NEXT_PUBLIC_LIVEKIT_URL`
-- `LIVEKIT_URL`
-- `LIVEKIT_API_KEY`
-- `LIVEKIT_API_SECRET`
+## 🎙️ Module 1 — Conversational AI Pipeline (`convFlow`)
 
-### 3. Frontend Install
+The voice agent that drives the interview — listening, reasoning, and responding in **under one second**.
 
-```bash
-cd frontend
-npm install
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**👂 Audio Input**
+- `Silero VAD` — noise-robust speech detection
+- `Smart-Turn v3.2` — ONNX turn-end prediction
+- `Whisper STT` — progressive transcription
+
+</td>
+<td width="33%" valign="top">
+
+**🧠 Intelligence**
+- `Node A` — scores depth & red flags
+- `Node B` — decides topic / phase
+- `Node C` — generates response via Gemini
+- `Summarizer` — rolling context compression
+
+</td>
+<td width="33%" valign="top">
+
+**🗣️ Audio Output**
+- `Kokoro TTS` — ultra-fast default
+- `Piper TTS` — CPU-optimised local
+- `F5-TTS` — diffusion-based expressive
+
+</td>
+</tr>
+</table>
+
+**Interview phases:** `Intro` → `Resume Deep-Dive` → `Core CS` → `Scenario / System Design`
+
+---
+
+## 👁️ Module 2 — Vision Intelligence
+
+Real-time analysis of candidate body language and engagement using the webcam stream.
+
+| Signal | Method | Output |
+|---|---|---|
+| **Gaze Tracking** | MediaPipe FaceMesh (5-point calibration) | On-screen focus score |
+| **Confidence** | VideoMAE — 15-second video chunks | Percentile ranking |
+| **Facial Expression** | Ranking-supervised latent model | Smile · Neutral · Stress |
+
+---
+
+## 🔊 Module 3 — Voice Evaluation (`Voice_Evaluation_PRJ3`)
+
+A dedicated deep learning system for fine-grained speaking skill assessment.
+
+```
+Audio Input
+    │
+    ▼
+┌──────────────────────────────────────┐
+│  Wav2Vec2-Base  (feature extraction) │
+└────────────────┬─────────────────────┘
+                 │
+    ┌────────────▼──────────────┐
+    │  BiLSTM  +  Regression    │  ← Spearman Correlation Loss
+    └────────────┬──────────────┘
+                 │
+    ┌────────────▼────────────────────────┐
+    │ Energy (RMS) · Pitch (F0) · Fluency │
+    │ Jitter · Pause Rate · ZCR           │
+    └─────────────────────────────────────┘
 ```
 
-### 4. Python Runtime Notes
+> **Training objective:** Spearman Correlation Loss — optimised to preserve human ranking order, not just raw score accuracy.
 
-This repository does not use one single Python package file for every service. The main runtime is launched from the existing conda environment referenced by `start-system.ps1`, while the model subprojects have their own dependency files and documentation.
+---
 
-- `Atempt2/` uses `environment.yaml` and its own model-training pipeline.
-- `Voice_Evaluation_PRJ3/` uses `requirements.txt` and its own Wav2Vec2 project README.
+## 📊 RecruitView Dataset
 
-## Run the Platform
+The backbone of all model training and evaluation.
 
-The quickest way to start everything on Windows is:
+<div align="center">
+
+| 🎬 Videos | 🎯 Dimensions | 📐 Methodology |
+|:---:|:---:|:---:|
+| **2,011** | **12 Behavioral** | **Ranking-Supervised** |
+| Q&A interview sessions | Confidence · Fluency · Professionalism · … | Human pairwise ranking |
+
+</div>
+
+---
+
+## 🛠️ Tech Stack
+
+<table>
+<tr><td><b>Layer</b></td><td><b>Technology</b></td></tr>
+<tr><td>Frontend</td><td>Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · GSAP</td></tr>
+<tr><td>Backend</td><td>FastAPI · Celery · Redis</td></tr>
+<tr><td>Media</td><td>LiveKit WebRTC SFU · Docker Compose</td></tr>
+<tr><td>ML Runtime</td><td>PyTorch · OpenCV · MediaPipe · Hugging Face Transformers</td></tr>
+<tr><td>Database</td><td>Supabase (Postgres) · Redis</td></tr>
+<tr><td>DevOps</td><td>Docker · Windows PowerShell orchestration</td></tr>
+</table>
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- 🐳 **Docker Desktop** — running
+- 🐍 **Conda** — `pupil310` environment active
+- 🎞️ **FFmpeg** — on system `PATH`
+
+### Launch
 
 ```powershell
+# Clone the repo
+git clone https://github.com/your-org/lattice.git
+cd lattice
+
+# Fire everything up
 .\start-system.ps1
 ```
 
-That script starts:
+The orchestration script brings up all services automatically:
 
-- Docker infrastructure (`redis` and `livekit` from `docker-compose.yml`)
-- The FastAPI inference service on port `8001`
-- The Celery worker
-- The vision server
-- The Next.js frontend on port `3000`
-
-If you want to start services manually:
-
-```powershell
-docker compose up -d
-cd inference-service
-uvicorn main:app --host 0.0.0.0 --port 8001
+```
+✔  Redis        — signaling store
+✔  LiveKit      — WebRTC SFU
+✔  Vision       — port 8000
+✔  Inference    — port 8001
+✔  Celery       — task workers
+✔  Next.js      — port 3000  ← open this
 ```
 
-```powershell
-celery -A backend.worker.celery_app worker -l info --queues "control,chunk-control,chunk-inference,chunk-results"
-```
+> Visit **`http://localhost:3000`** to start an interview session.
 
-```powershell
-python Vision/vision_server.py
-```
+---
 
-```bash
-cd frontend
-npm run dev
-```
+## 📜 Development Timeline
 
-## Diagnostics
+All milestones, architectural pivots, and lessons learned are documented in [`TIMELINE.md`](./TIMELINE.md).
 
-- `check-livekit.ps1` validates LiveKit credentials, container health, port availability, and frontend dependencies.
-- `LIVEKIT_TROUBLESHOOTING.md` contains operational notes for connection issues.
-- `docker-compose.yml` is the source of truth for Redis and LiveKit during local development.
+---
 
-## Important Files
+<div align="center">
 
-### Root Orchestration
+<br/>
 
-- `docker-compose.yml` - Starts Redis and the LiveKit server. The Redis service backs both signaling and Celery, and LiveKit is configured for local media transport and UDP media ports.
-- `livekit.yaml` - LiveKit server configuration, including Redis address, API keys, room settings, and UDP port range.
-- `start-system.ps1` - Windows bootstrap script that launches the entire stack in the right order.
-- `check-livekit.ps1` - Health and configuration validator for LiveKit, environment variables, and frontend dependencies.
-- `.env.example` - Shared environment template for LiveKit, Redis, Celery, and inference service URLs.
+**Built with ❤️ by the Lattice Team**
 
-### Frontend
+*If this project helped you, drop a ⭐ — it means a lot.*
 
-- `frontend/package.json` - Next.js app manifest and script entry points.
-- `frontend/src/app/layout.tsx` - Root layout and global metadata for the app shell.
-- `frontend/src/app/page.tsx` - Home route that renders the landing page.
-- `frontend/src/app/interview/page.tsx` - Interview route that mounts the live interview room.
-- `frontend/src/app/globals.css` - Global Tailwind CSS theme, variables, and animation utilities.
-- `frontend/src/app/pages/homepage.tsx` - Animated marketing landing page with client-side motion effects and route navigation.
-- `frontend/src/app/pages/homepage.module.css` - Scoped CSS animation helpers for the landing page.
-- `frontend/src/app/component/InterviewRoom.tsx` - Main interview experience. Uses React state, fullscreen APIs, LiveKit, chunked recording, vision session state, and results overlays.
-- `frontend/src/app/component/CalibrationFlow.tsx` - Multi-step calibration screen for the eye-tracking flow.
-- `frontend/src/app/component/VisionSessionControl.tsx` - UI wrapper for starting and stopping vision sessions and rendering gaze results.
-- `frontend/src/app/component/InterviewWithVisionTracking.tsx` - Example interview screen that shows how to embed gaze tracking controls.
-- `frontend/src/app/component/LiveKitDebugPanel.tsx` - Debug panel for LiveKit health and token checks.
-- `frontend/src/app/component/GazeDebugPanel.tsx` - Debug panel for gaze metrics, calibration state, and marker controls.
-- `frontend/src/app/hooks/useLiveKitInterview.ts` - LiveKit connection hook that creates rooms, publishes local audio/video tracks, and retries on failure.
-- `frontend/src/app/hooks/useChunkedRecorder.ts` - Browser MediaRecorder hook that captures 15-second chunks and uploads them to the vision server.
-- `frontend/src/app/hooks/useVisionSession.ts` - WebSocket session hook for chunk processing, prediction updates, and session lifecycle state.
-- `frontend/src/app/hooks/useChunkedVisionSession.ts` - Alternate chunked-session hook for webcam capture plus server-side chunk analysis.
-- `frontend/src/app/hooks/useGazeTracking.ts` - Lower-level gaze tracking hook that streams frames over WebSocket and issues calibration commands.
-- `frontend/src/app/api/livekit-health/route.ts` - Server-side health endpoint that validates LiveKit environment variables.
-- `frontend/src/app/api/livekit-token/route.ts` - Token generator using `livekit-server-sdk.AccessToken`.
+<br/>
 
-### Backend and Queueing
+[![MIT License](https://img.shields.io/badge/MIT-License-22c55e?style=flat-square)](./LICENSE)
 
-- `backend/redis_client.py` - Redis-backed session store for chunks, events, and session metadata.
-- `backend/worker.py` - Celery application configuration, queues, serializers, and routing.
-- `backend/tasks.py` - Celery tasks for health checks, chunk enqueueing, inference dispatch, and result persistence.
-
-### Inference Service
-
-- `inference-service/main.py` - FastAPI app with a lifespan loader and `/infer/chunk` endpoint.
-- `inference-service/models.py` - Loads and coordinates analyzers from the vision stack, then runs them in parallel with `asyncio`.
-
-### Vision and Media Processing
-
-- `Vision/vision_server.py` - Main multimodal analysis server. Uses FastAPI, OpenCV, MediaPipe, PyTorch, Transformers, and ffmpeg to load voice, VideoMAE, facial, and gaze analyzers.
-- `Vision/realtime_inference.py` - Offline chunk processor that samples frames from each recorded chunk and writes per-session predictions.
-- `Vision/vision.py` - Gaze and screen-calibration runtime used by the vision server.
-- `Vision/data/` - Runtime output for gaze logs, predictions, uploads, and session artifacts.
-
-### LiveKit Worker
-
-- `livekit-worker/agent.py` - LiveKit Agents worker that subscribes to rooms, buffers video tracks, and manages chunk lifecycle events.
-- `livekit-worker/buffer.py` - Frame-buffering and chunk-building logic for remote LiveKit video tracks.
-
-### Video Model Project (`Atempt2/`)
-
-- `Atempt2/README.md` - Project-level documentation for the ranking-supervised video model.
-- `Atempt2/environment.yaml` - Conda environment definition for the training and evaluation stack.
-- `Atempt2/config.yaml` - Project configuration for model and training parameters.
-- `Atempt2/evaluate_models.py` - Evaluation entry point for comparing trained models.
-- `Atempt2/validate_inference.py` - Inference validation utility.
-- `Atempt2/scripts/extract_audio.py` - Helper for pulling audio from video files.
-- `Atempt2/src/dataset/*.py` - Dataset loaders and inspectors for RecruitView data.
-- `Atempt2/src/model/*.py` - Audio and video model definitions used by the project.
-- `Atempt2/src/training/*.py` - Training scripts, loss definitions, and checkpoint handling.
-- `Atempt2/checkpoints/` - Saved model weights used by the runtime services.
-
-### Voice Model Project (`Voice_Evaluation_PRJ3/`)
-
-- `Voice_Evaluation_PRJ3/README.md` - Detailed Wav2Vec2 project documentation, training notes, and usage examples.
-- `Voice_Evaluation_PRJ3/requirements.txt` - Python dependency list for the voice evaluation project.
-- `Voice_Evaluation_PRJ3/voice_evaluation_wav2vec.py` - Standalone evaluation script for scoring and comparing voice samples.
-- `Voice_Evaluation_PRJ3/src/model/voice_wav2vec_model.py` - Wav2Vec2 regression model used for speaking-skills scoring.
-- `Voice_Evaluation_PRJ3/src/dataset/voice_wav_dataset.py` - Dataset loader for voice training data.
-- `Voice_Evaluation_PRJ3/src/training/*.py` - Training and validation scripts for voice ranking models.
-
-## Operational Notes
-
-- The root app is a multi-service system, not a single executable.
-- The vision and inference stack depends on local model checkpoints and on `ffmpeg` for video-to-audio conversion and codec normalization.
-- Production deployment should replace the development LiveKit keys in `docker-compose.yml` and `livekit.yaml`.
-- The frontend assumes the LiveKit and vision services are reachable on local ports unless environment variables override them.
-
-## Suggested Next Steps
-
-1. Add a `.env` and `frontend/.env.local` for your local machine.
-2. Run `start-system.ps1` and verify the browser flow at `/interview`.
-3. If you want, I can also create a more detailed setup README inside each subproject so the root document can stay shorter.
+</div>
