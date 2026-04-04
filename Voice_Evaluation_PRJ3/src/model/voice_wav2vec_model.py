@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import warnings
 from transformers import Wav2Vec2Model
 
 
@@ -8,9 +9,13 @@ class VoiceWav2VecModel(nn.Module):
         super().__init__()
 
         # Pretrained Wav2Vec2 Base
-        self.wav2vec = Wav2Vec2Model.from_pretrained(
-            "facebook/wav2vec2-base"
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Passing `gradient_checkpointing` to a config initialization is deprecated.*",
+                category=UserWarning,
+            )
+            self.wav2vec = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base")
 
         # Freeze most layers for stability & speed
         for param in self.wav2vec.parameters():

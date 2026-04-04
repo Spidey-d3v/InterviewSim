@@ -65,6 +65,11 @@ VOICE_MODEL_PATH = str(_VOICE_ROOT / "voice_wav2vec_model.pt")
 VOICE_SAMPLE_RATE = 16000
 VOICE_MAX_SECONDS = 15
 
+
+def _model_has_meta_tensors(model: torch.nn.Module) -> bool:
+    """Return True if any model parameter or buffer is a meta tensor."""
+    return any(t.is_meta for t in model.parameters()) or any(t.is_meta for t in model.buffers())
+
 # app is created after lifespan is defined below
 
 # ---------------------------------------------------------------------------
@@ -104,10 +109,14 @@ class VoiceAnalyzer:
             try:
                 self._device = "cuda" if torch.cuda.is_available() else "cpu"
                 print(f"[VoiceAnalyzer] Loading model on {self._device}…")
-                self._model = VoiceWav2VecModel().to(self._device)
+                self._model = VoiceWav2VecModel()
+                if _model_has_meta_tensors(self._model):
+                    # Materialize lazy/meta tensors before loading checkpoint weights.
+                    self._model = self._model.to_empty(device="cpu")
                 self._model.load_state_dict(
-                    torch.load(VOICE_MODEL_PATH, map_location=self._device, weights_only=False)
+                    torch.load(VOICE_MODEL_PATH, map_location="cpu", weights_only=False)
                 )
+                self._model = self._model.to(self._device)
                 self._model.eval()
                 print(f"[VoiceAnalyzer] Model ready on {self._device}")
                 return True
@@ -278,11 +287,17 @@ class _BaseVideoAnalyzer:
             try:
                 self._device = "cuda" if torch.cuda.is_available() else "cpu"
                 print(f"[{self._label}] Loading model on {self._device}…")
-                self._processor = AutoImageProcessor.from_pretrained("MCG-NJU/videomae-base")
-                self._model = _VideoModel().to(self._device)
-                ckpt = torch.load(self._model_path, map_location=self._device, weights_only=False)
+                self._processor = AutoImageProcessor.from_pretrained(
+                    "MCG-NJU/videomae-base", use_fast=False
+                )
+                self._model = _VideoModel()
+                if _model_has_meta_tensors(self._model):
+                    # Materialize lazy/meta tensors before loading checkpoint weights.
+                    self._model = self._model.to_empty(device="cpu")
+                ckpt = torch.load(self._model_path, map_location="cpu", weights_only=False)
                 state = ckpt.get("model_state_dict", ckpt)
                 self._model.load_state_dict(state)
+                self._model = self._model.to(self._device)
                 self._model.eval()
                 print(f"[{self._label}] Model ready on {self._device}")
                 return True
@@ -520,7 +535,7 @@ active_sessions = {}
 
 # Max concurrent chunk-processing tasks (each spawns a vision.py subprocess).
 # Initialised in lifespan so it's bound to the correct event loop.
-CHUNK_SEMAPHORE: asyncio.Semaphore  # forward declaration; assigned in lifespan
+CHUNK_SEMAPHORE = None  # Initialize at module level
 
 
 class VisionSession:
