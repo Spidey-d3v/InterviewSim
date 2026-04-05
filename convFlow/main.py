@@ -1,6 +1,6 @@
 import asyncio
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from livekit import rtc
 from livekit.rtc import Room, AudioStream
@@ -17,6 +17,19 @@ from interview.engine import InterviewEngine
 import json
 import time
 from turn_taking.smart_turn import SmartTurnV3
+import fitz
+import httpx
+import os
+from dotenv import load_dotenv
+from supabase import create_client, Client
+
+load_dotenv()
+
+# Initialize Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 LIVEKIT_URL = "ws://localhost:7880"
 API_KEY = "devkey"
@@ -140,17 +153,71 @@ async def token():
 
     @agent_room.on("disconnected")
     def on_disconnect():
-        print(f"🧹 Cleaning up room {room_name}")
-        rooms.pop(room_name, None)
-        room_states.pop(room_name, None)
-        voice_agents.pop(room_name, None)
-        interview_engines.pop(room_name, None)
-        audio_sources.pop(room_name, None)
+        print(f"🧹 Cleaning up room {room_name} (Agent disconnected)")
+        cleanup_room(room_name)
+
+    @agent_room.on("participant_disconnected")
+    def on_participant_disconnected(participant):
+        print(f"👋 User left room {room_name}. Force cleaning...")
+        cleanup_room(room_name)
+
+    def cleanup_room(name):
+        rooms.pop(name, None)
+        room_states.pop(name, None)
+        voice_agents.pop(name, None)
+        interview_engines.pop(name, None)
+        audio_sources.pop(name, None)
 
     return {
         "token": token,
         "room": room_name,
     }
+
+@app.post("/api/parse-resume")
+async def parse_resume(
+    file: UploadFile = File(...), 
+    user_id: str = Form(...),
+    user_email: str = Form(...),
+    user_full_name: str = Form(...) # Received from Auth metadata
+):
+    try:
+        # 1. Text Extraction
+        pdf_content = await file.read()
+        doc = fitz.open(stream=pdf_content, filetype="pdf")
+        raw_text = "".join([page.get_text() for page in doc])
+        doc.close()
+
+        # 2. AI Parsing
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
+        
+        payload = {
+            "contents": [{
+                "parts": [{
+                    "text": f"Extract ONLY skills (list) and experience (list of objects) from this resume. Return raw JSON: {raw_text}"
+                }]
+            }],
+            "generationConfig": {"response_mime_type": "application/json"}
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, timeout=40.0)
+            ai_data = json.loads(response.json()['candidates'][0]['content']['parts'][0]['text'])
+
+        # 3. Database Upsert
+        supabase.table("profiles").upsert({
+            "id": user_id, 
+            "email": user_email,           # Auth Email
+            "full_name": user_full_name,   # Auth Name
+            "resume_text": raw_text,
+            "resume_json": ai_data,
+            "updated_at": "now()"
+        }).execute()
+
+        return {"status": "success", "data": ai_data}
+
+    except Exception as e:
+        print(f"❌ Resume Parsing Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------- LiveKit Agent --------------------
 async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):

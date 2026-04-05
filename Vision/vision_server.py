@@ -486,7 +486,7 @@ def _cleanup_stale_uploads(max_age_seconds: int = 3600) -> None:
 async def lifespan(app_: FastAPI):
     """Load all ML models in thread-pool workers at startup."""
     global CHUNK_SEMAPHORE
-    CHUNK_SEMAPHORE = asyncio.Semaphore(3)
+    CHUNK_SEMAPHORE = asyncio.Semaphore(1)
     loop = asyncio.get_running_loop()
 
     # Remove stale uploads left over from any previous crashed sessions
@@ -533,9 +533,11 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 active_sessions = {}
 
-# Max concurrent chunk-processing tasks (each spawns a vision.py subprocess).
-# Initialised in lifespan so it's bound to the correct event loop.
-CHUNK_SEMAPHORE = None  # Initialize at module level
+# Sequential processing (1 at a time) ensures each chunk finishes as fast as possible
+# without resource contention, providing a better "real-time" experience.
+CHUNK_SEMAPHORE = None  # Initialized in lifespan as Semaphore(1)
+
+# app is created after lifespan is defined below
 
 
 class VisionSession:
@@ -873,6 +875,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     current_session = None
     monitoring_task = None
+    pending_chunk_tasks = set()
     
     async def monitor_predictions():
         """Background task to monitor and send prediction updates"""
@@ -1027,9 +1030,11 @@ async def websocket_endpoint(websocket: WebSocket):
                 else:
                     print(f"Processing chunk {chunk_index} ({chunk_id}): {video_path}")
                     # Fire and forget — each chunk runs independently
-                    asyncio.create_task(
+                    task = asyncio.create_task(
                         _process_chunk(websocket, chunk_id, chunk_index, video_path)
                     )
+                    pending_chunk_tasks.add(task)
+                    task.add_done_callback(pending_chunk_tasks.discard)
 
             elif action == 'get_status':
                 if current_session and current_session.is_running:
@@ -1045,7 +1050,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     })
                     
     except WebSocketDisconnect:
-        print("Client disconnected")
+        print(f"Client disconnected. Waiting for {len(pending_chunk_tasks)} background tasks...")
+        if current_session:
+            current_session.cleanup()
+            active_sessions.pop(current_session.session_id, None)
+        if monitoring_task:
+            monitoring_task.cancel()
+        
+        if pending_chunk_tasks:
+            await asyncio.wait(pending_chunk_tasks, timeout=15)
+            print("Background tasks completed or timed out.")
+    except Exception as e:
+        print(f"Error: {e}")
         if current_session:
             current_session.cleanup()
             active_sessions.pop(current_session.session_id, None)
