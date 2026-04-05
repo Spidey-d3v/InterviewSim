@@ -16,7 +16,9 @@ audio/
 converted_*.wav
 *.safetensors
 *.pt
+*.onnx
 
 # Environment variables
 .env.local
 .env
+
