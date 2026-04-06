@@ -1,15 +1,15 @@
-'use client';
+import { redirect } from 'next/navigation'
+import { createServerSupabaseClient } from '@/utils/supabase-server'
 
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+export default async function Page() {
+  const supabase = await createServerSupabaseClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-export default function Page() {
-  const router = useRouter();
+  if (user) {
+    redirect('/front/homepage')
+  }
 
-  useEffect(() => {
-    // Redirect to login on first load
-    router.push('/auth/login');
-  }, [router]);
-
-  return null;
+  redirect('/auth/login')
 }

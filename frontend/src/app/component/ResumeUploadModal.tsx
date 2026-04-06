@@ -7,9 +7,10 @@ import { createClient } from '@/utils/supabase';
 
 interface ResumeUploadModalProps {
   onClose: () => void;
+  onUploadSuccess?: () => void;
 }
 
-export default function ResumeUploadModal({ onClose }: ResumeUploadModalProps) {
+export default function ResumeUploadModal({ onClose, onUploadSuccess }: ResumeUploadModalProps) {
   const [mounted, setMounted] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<'idle' | 'uploading' | 'success'>('idle');
@@ -67,6 +68,7 @@ export default function ResumeUploadModal({ onClose }: ResumeUploadModalProps) {
         throw new Error(err.detail || 'Failed to parse resume');
       }
 
+      onUploadSuccess?.();
       setStatus('success');
       setTimeout(() => onClose(), 1500);
       

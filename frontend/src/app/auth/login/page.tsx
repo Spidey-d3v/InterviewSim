@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { createClient } from "@/utils/supabase";
 
+const DEV_SESSION_TTL_MINUTES = 30;
+
 export default function Login() {
   const router = useRouter();
   const supabase = createClient();
@@ -36,6 +38,8 @@ export default function Login() {
 
       // Success! Redirect to the homepage or dashboard
       if (data.session) {
+        const expiresAt = Date.now() + DEV_SESSION_TTL_MINUTES * 60 * 1000;
+        document.cookie = `app_session_expires_at=${expiresAt}; Path=/; SameSite=Lax`;
         router.push("/front/homepage");
       }
     } catch (error: any) {

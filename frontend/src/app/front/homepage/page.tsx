@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { UploadCloud, FileText, X, CheckCircle, Loader2 } from 'lucide-react';
 import ResumeUploadModal from '../../component/ResumeUploadModal'; 
+import { createClient } from '@/utils/supabase';
 
 function useMounted() {
   const [mounted, setMounted] = useState(false);
@@ -13,11 +14,45 @@ function useMounted() {
 
 export default function HomePage() { 
   const router = useRouter();
+  const supabase = createClient();
   const mounted = useMounted();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [hasResume, setHasResume] = useState<boolean | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mlBars, setMlBars] = useState<Array<{ width: number; value: number }>>([]);
   const heroRef = useRef<HTMLDivElement>(null);
+
+  const checkResumeStatus = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) {
+      setHasResume(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('resume_text, resume_json')
+      .eq('id', authData.user.id)
+      .maybeSingle();
+
+    if (profileError || !profile) {
+      setHasResume(false);
+      return;
+    }
+
+    const hasResumeText = typeof profile.resume_text === 'string' && profile.resume_text.trim().length > 0;
+    const hasResumeJson = profile.resume_json !== null;
+    setHasResume(hasResumeText || hasResumeJson);
+  };
+
+  const handleStartInterview = () => {
+    if (hasResume) {
+      router.push('/front/interview');
+      return;
+    }
+
+    setIsModalOpen(true);
+  };
 
   // Generate ML visualization bars on client side only (avoid hydration mismatch)
   useEffect(() => {
@@ -55,6 +90,10 @@ export default function HomePage() {
     });
 
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    checkResumeStatus();
   }, []);
 
   const features = [
@@ -140,7 +179,7 @@ export default function HomePage() {
             Upload Resume
           </button>
           <button 
-            onClick={() => router.push('/front/interview')}
+            onClick={handleStartInterview}
             className="px-4 py-2 bg-white text-black text-sm font-medium rounded-lg hover:bg-gray-100 transition-all"
           >
             Start Interview
@@ -174,7 +213,7 @@ export default function HomePage() {
 
           <div className="flex flex-wrap gap-4 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
             <button 
-              onClick={() => router.push('/interview')}
+              onClick={handleStartInterview}
               className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-100 transition-all hover:scale-105"
             >
               Start Interview Now
@@ -451,7 +490,10 @@ export default function HomePage() {
 
       {/* Modal Portal */}
       {isModalOpen && (
-        <ResumeUploadModal onClose={() => setIsModalOpen(false)} />
+        <ResumeUploadModal
+          onClose={() => setIsModalOpen(false)}
+          onUploadSuccess={() => setHasResume(true)}
+        />
       )}
     </div>
   );
