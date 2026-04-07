@@ -17,6 +17,7 @@ export default function HomePage() {
   const supabase = createClient();
   const mounted = useMounted();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasResume, setHasResume] = useState<boolean | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mlBars, setMlBars] = useState<Array<{ width: number; value: number }>>([]);
@@ -25,9 +26,12 @@ export default function HomePage() {
   const checkResumeStatus = async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
     if (authError || !authData.user) {
+      setIsLoggedIn(false);
       setHasResume(false);
       return;
     }
+
+    setIsLoggedIn(true);
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -166,11 +170,22 @@ export default function HomePage() {
         </div>
 
         <div className="flex items-center gap-4">
-          <button 
-          onClick={() => router.push('/auth/login')}
-          className="text-sm text-gray-400 hover:text-white transition-colors">
-            Log in
-          </button>
+          {!isLoggedIn && (
+            <button 
+              onClick={() => router.push('/auth/login')}
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              Log in
+            </button>
+          )}
+          {isLoggedIn && (
+            <button
+              onClick={() => router.push('/front/profile')}
+              className="text-sm text-gray-300 hover:text-white transition-colors"
+            >
+              Profile
+            </button>
+          )}
           <button 
             onClick={() => setIsModalOpen(true)}
             className="px-4 py-2 bg-transparent border border-gray-700 text-white text-sm font-medium rounded-lg hover:border-gray-500 transition-all flex items-center gap-2"

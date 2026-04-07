@@ -46,6 +46,38 @@ audio_sources = {}
 voice_agents = {}
 interview_engines = {}
 
+
+async def publish_new_question(
+    room_name: str,
+    question_text: str | None,
+    stream_id: str | None = None,
+    is_final: bool = True,
+):
+    if not question_text or not question_text.strip():
+        return
+
+    agent_room_ref = rooms.get(room_name)
+    interview_engine = interview_engines.get(room_name)
+    if not agent_room_ref or not interview_engine:
+        return
+
+    state = interview_engine.state
+    payload = {
+        "event": "new_question",
+        "question_text": question_text.strip(),
+        "phase": state.get("phase"),
+        "turn_index": len(state.get("asked_questions_phase", [])),
+        "stream_id": stream_id,
+        "is_final": is_final,
+        "ts": time.time(),
+    }
+
+    await agent_room_ref.local_participant.publish_data(
+        json.dumps(payload).encode(),
+        reliable=True,
+    )
+    print("📡 Sent new_question to frontend")
+
 # -------------------- SmartTurn --------------------
 smart_turn = SmartTurnV3(threshold=0.5)
 
@@ -161,8 +193,22 @@ async def token(user_id: str | None = Query(default=None)):
     interview_engines[room_name] = InterviewEngine(llm, resume_context=resume_context)
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
     async def start_interview():
-        await asyncio.sleep(1)
-        await voice_agents[room_name].handle_turn("", asyncio.get_event_loop().time())
+        try:
+            await asyncio.sleep(1)
+            stream_id = f"{room_name}:{time.time_ns()}"
+
+            async def on_question_update(text: str, is_final: bool):
+                await publish_new_question(room_name, text, stream_id=stream_id, is_final=is_final)
+
+            first_question = await voice_agents[room_name].handle_turn(
+                "",
+                asyncio.get_event_loop().time(),
+                on_question_update=on_question_update,
+            )
+            fallback_question = first_question or interview_engines[room_name].state.get("last_question")
+            await publish_new_question(room_name, fallback_question, stream_id=stream_id, is_final=True)
+        except Exception as e:
+            print(f"⚠️ Failed to publish initial question for {room_name}: {e}")
     asyncio.create_task(start_interview())
     local_track = rtc.LocalAudioTrack.create_audio_track("tts", audio_source)
 
@@ -317,5 +363,20 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                     state["smart_turn_checked"] = False  # reset for next turn
 
                     state["tts_busy"] = True
-                    await voice_agent.handle_turn(transcript, stt_done_time)
-                    state["tts_busy"] = False
+                    try:
+                        stream_id = f"{room_name}:{time.time_ns()}"
+
+                        async def on_question_update(text: str, is_final: bool):
+                            await publish_new_question(room_name, text, stream_id=stream_id, is_final=is_final)
+
+                        generated_question = await voice_agent.handle_turn(
+                            transcript,
+                            stt_done_time,
+                            on_question_update=on_question_update,
+                        )
+                        fallback_question = generated_question or interview_engines[room_name].state.get("last_question")
+                        await publish_new_question(room_name, fallback_question, stream_id=stream_id, is_final=True)
+                    except Exception as e:
+                        print(f"⚠️ Failed to handle/publish AI question for {room_name}: {e}")
+                    finally:
+                        state["tts_busy"] = False

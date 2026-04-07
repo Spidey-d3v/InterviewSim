@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import AsyncGenerator
+from typing import Awaitable, Callable
 import numpy as np
 from livekit import rtc
 
@@ -76,17 +76,45 @@ class StreamingVoiceAgent:
             await asyncio.sleep(0.05)
             self.tts_queue.task_done()
 
-    async def handle_turn(self, prompt: str, stt_done_time: float):
+    async def handle_turn(
+        self,
+        prompt: str,
+        stt_done_time: float,
+        on_question_update: Callable[[str, bool], Awaitable[None]] | None = None,
+    ):
         if not prompt.strip() and self.interview_engine.state["last_question"]:
-            return
+            last_q = self.interview_engine.state["last_question"]
+            if on_question_update and last_q:
+                await on_question_update(last_q, True)
+            return last_q
         
         self.turn_start = stt_done_time
         self.first_audio_emitted = False
         chunker = SentenceChunker()
         tts_task = asyncio.create_task(self._tts_worker())
+        streamed_question = ""
+        last_emit_len = 0
+        last_emit_ts = 0.0
+        min_emit_interval_s = 0.2
+        min_emit_delta_chars = 10
     
         # Stream tokens
         async for token in self.interview_engine.stream_step(prompt):
+            streamed_question += token
+            if on_question_update:
+                now = asyncio.get_event_loop().time()
+                should_emit = (
+                    len(streamed_question.strip()) - last_emit_len >= min_emit_delta_chars
+                    or token.endswith((".", "?", "!", "\n"))
+                    or now - last_emit_ts >= min_emit_interval_s
+                )
+                if should_emit:
+                    text = streamed_question.strip()
+                    if text:
+                        await on_question_update(text, False)
+                        last_emit_len = len(text)
+                        last_emit_ts = now
+
             chunks = await chunker.feed(token)
             for sentence in chunks:
                 await self.tts_queue.put(sentence)
@@ -99,6 +127,11 @@ class StreamingVoiceAgent:
         # Signal end and wait for TTS to finish
         await self.tts_queue.put(None)
         await tts_task
+
+        final_question = self.interview_engine.state.get("last_question")
+        if on_question_update and final_question:
+            await on_question_update(final_question, True)
+        return final_question
         
     # --------- HELPER ------------
 

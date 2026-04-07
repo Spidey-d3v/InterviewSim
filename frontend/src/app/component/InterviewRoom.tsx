@@ -1,28 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useVisionSession } from '../hooks/useVisionSession';
 import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
 import { useConvFlowRoom } from '../hooks/useConvFlowRoom';
 import { LiveKitDebugPanel } from './LiveKitDebugPanel';
 import CalibrationFlow from './CalibrationFlow';
-
-// ---------------------------------------------------------------------------
-// Static question bank — at module scope to avoid re-allocation on every render
-// ---------------------------------------------------------------------------
-const INTERVIEW_QUESTIONS = [
-  'Tell me about yourself and your background.',
-  'Describe a time when you had to work under pressure. How did you handle it?',
-  'What is your greatest professional achievement?',
-  'Tell me about a challenge you faced at work and how you overcame it.',
-  'Where do you see yourself in five years?',
-  'Why are you interested in this role?',
-  'Describe a situation where you had to work with a difficult team member.',
-  'What are your greatest strengths and how have they helped you professionally?',
-  'Tell me about a time you failed and what you learned from it.',
-  'Do you have any questions for us?',
-];
 
 export default function InterviewRoom() {
   const router = useRouter();
@@ -37,8 +21,42 @@ export default function InterviewRoom() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
 
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const questionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [questionStatus, setQuestionStatus] = useState<'waiting' | 'processing' | 'streaming' | 'ready'>('waiting');
+  const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
+  const [activeQuestionStreamId, setActiveQuestionStreamId] = useState<string | null>(null);
+
+  const handleNewQuestion = useCallback(
+    (
+      questionText: string,
+      meta?: { phase?: string; turnIndex?: number; ts?: number; streamId?: string; isFinal?: boolean }
+    ) => {
+      const normalized = questionText.trim();
+      if (!normalized) return;
+
+      if (meta?.streamId) {
+        setActiveQuestionStreamId(meta.streamId);
+      }
+
+      if (meta?.isFinal) {
+        setAiQuestions((prev) => {
+          if (prev[prev.length - 1] === normalized) return prev;
+          const next = [...prev, normalized];
+          setQuestionIndex(next.length - 1);
+          return next;
+        });
+        setStreamingQuestion(null);
+        setActiveQuestionStreamId(null);
+        setQuestionStatus('ready');
+        return;
+      }
+
+      setStreamingQuestion(normalized);
+      setQuestionStatus('streaming');
+    },
+    []
+  );
 
   // Vision.py session hook
   const {
@@ -76,7 +94,16 @@ export default function InterviewRoom() {
     onError: (msg) => console.error('[Recorder]', msg),
   });
 
-  useConvFlowRoom({ onTurnEnd: flushChunk, stream: cameraStream });
+  const handleTurnEnd = useCallback(() => {
+    flushChunk();
+    if (interviewStarted) {
+      setStreamingQuestion(null);
+      setActiveQuestionStreamId(null);
+      setQuestionStatus('processing');
+    }
+  }, [flushChunk, interviewStarted]);
+
+  useConvFlowRoom({ onTurnEnd: handleTurnEnd, onNewQuestion: handleNewQuestion, stream: cameraStream });
 
   // Request camera + microphone on mount and feed stream into video element
   useEffect(() => {
@@ -131,23 +158,6 @@ export default function InterviewRoom() {
     };
   }, []);
 
-  // Auto-advance questions every 90 seconds while recording
-  useEffect(() => {
-    if (interviewStarted && isChunkRecording) {
-      questionTimerRef.current = setInterval(() => {
-        setQuestionIndex((prev) =>
-          prev < INTERVIEW_QUESTIONS.length - 1 ? prev + 1 : prev
-        );
-      }, 90_000);
-    }
-    return () => {
-      if (questionTimerRef.current) {
-        clearInterval(questionTimerRef.current);
-        questionTimerRef.current = null;
-      }
-    };
-  }, [interviewStarted, isChunkRecording]);
-
   const enterFullscreen = async () => {
     if (containerRef.current && !document.fullscreenElement) {
       try {
@@ -173,6 +183,11 @@ export default function InterviewRoom() {
   const handleCalibrationComplete = () => {
     setShowCalibration(false);
     setInterviewStarted(true);
+    setAiQuestions([]);
+    setQuestionIndex(0);
+    setStreamingQuestion(null);
+    setActiveQuestionStreamId(null);
+    setQuestionStatus('waiting');
 
     // Enter fullscreen mode
     enterFullscreen();
@@ -400,19 +415,37 @@ export default function InterviewRoom() {
                 <div className="max-w-3xl mx-auto">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-purple-400">
-                      Question {questionIndex + 1} of {INTERVIEW_QUESTIONS.length}
+                      {questionStatus === 'streaming' && streamingQuestion
+                        ? `Question ${activeQuestionStreamId ? '(streaming)' : ''}`
+                        : aiQuestions.length > 0
+                        ? `Question ${questionIndex + 1} of ${aiQuestions.length}`
+                        : 'Introduce yourself.'}
                     </p>
+                    {questionStatus === 'processing' && (
+                      <div className="text-xs text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 rounded-full px-2 py-0.5">
+                        Interviewer is thinking...
+                      </div>
+                    )}
+                    {questionStatus === 'streaming' && (
+                      <div className="text-xs text-purple-200 bg-purple-500/10 border border-purple-500/30 rounded-full px-2 py-0.5">
+                        Interviewer is speaking...
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => setQuestionIndex((p) => Math.max(0, p - 1))}
-                        disabled={questionIndex === 0}
+                        disabled={questionIndex === 0 || questionStatus === 'streaming'}
                         className="px-2 py-1 text-xs text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
                       >
                         ← Prev
                       </button>
                       <button
-                        onClick={() => setQuestionIndex((p) => Math.min(INTERVIEW_QUESTIONS.length - 1, p + 1))}
-                        disabled={questionIndex === INTERVIEW_QUESTIONS.length - 1}
+                        onClick={() => setQuestionIndex((p) => Math.min(aiQuestions.length - 1, p + 1))}
+                        disabled={
+                          aiQuestions.length === 0 ||
+                          questionIndex >= aiQuestions.length - 1 ||
+                          questionStatus === 'streaming'
+                        }
                         className="px-2 py-1 text-xs text-gray-400 hover:text-white disabled:opacity-30 transition-colors"
                       >
                         Next →
@@ -421,13 +454,23 @@ export default function InterviewRoom() {
                   </div>
                   {/* Progress bar */}
                   <div className="h-0.5 bg-white/10 rounded-full mb-3 overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500 transition-all duration-500"
-                      style={{ width: `${((questionIndex + 1) / INTERVIEW_QUESTIONS.length) * 100}%` }}
-                    />
+                    {aiQuestions.length > 0 && questionStatus !== 'streaming' ? (
+                      <div
+                        className="h-full bg-purple-500 transition-all duration-500"
+                        style={{ width: `${((questionIndex + 1) / aiQuestions.length) * 100}%` }}
+                      />
+                    ) : (
+                      <div className="h-full w-1/3 bg-purple-500/70 animate-pulse" />
+                    )}
                   </div>
                   <p className="text-lg text-white">
-                    {INTERVIEW_QUESTIONS[questionIndex]}
+                    {streamingQuestion
+                      ? streamingQuestion
+                      : aiQuestions.length > 0
+                      ? aiQuestions[questionIndex]
+                      : questionStatus === 'processing'
+                      ? 'Processing your response...'
+                      : 'Introduce yourself.'}
                   </p>
                 </div>
               </div>
@@ -600,7 +643,6 @@ export default function InterviewRoom() {
             if (isChunkRecording) {
               stopRecorder();
             } else if (cameraStream) {
-              setQuestionIndex(0);
               startRecorder(cameraStream);
             }
           }}
