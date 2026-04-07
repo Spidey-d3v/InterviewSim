@@ -23,6 +23,6 @@ converted_*.wav
 .env
 
 
-start-system.ps1
+*.ps1
 *.cmd
 
