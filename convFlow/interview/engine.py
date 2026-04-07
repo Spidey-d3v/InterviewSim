@@ -2,114 +2,201 @@ import asyncio
 
 from interview.init_state import create_initial_state
 
-from interview.nodes.node_a_evaluate import node_a_evaluate
-from interview.nodes.node_b_decide import node_b_decide
-from interview.nodes.node_c_generate import node_c_generate_stream
-from interview.nodes.rolling_summarizer import rolling_summarize
-from interview.utils.summary_utils import summary_trigger
-
+# Phase Nodes
+from convFlow.interview.nodes.node_p1_intro import node_p1_introduction
+from convFlow.interview.nodes.node_p2_resume import node_p2_resume_based
+from interview.nodes.node_p3_core_tech import node_p3_core_tech
+from interview.nodes.node_p4_situational import node_p4_situational
+from interview.nodes.node_p5_closing import node_p5_closing
+from utils.transcript_utils import save_phase_transcript
+from interview.nodes.node_s_evaluator import node_s_evaluator
+# Controller
+from interview.nodes.node_q_controller import node_q_controller
+from interview.nodes.node_r_streamer import node_r_generate_stream
+# Phase config
+from interview.config.phase_config import PHASE_CONFIG
+from interview.utils.rolling_summarizer import update_summary
 
 class InterviewEngine:
 
-    def __init__(self, llm, resume_context: str = ""):
-
+    def __init__(self, llm, job_role: str = "", job_description: str = "", resume_context: str = ""):
         self.llm = llm
         self.state = create_initial_state()
-        self.state["resume_context"] = resume_context or ""
+
+        self.state["job_role"] = job_role
+        self.state["job_description"] = job_description
+        self.state["resume_context"] = resume_context
     
-    async def background_summarize(self):
-        summary = self.state["rolling_summary"]
-        new_summary = await rolling_summarize(self.llm, summary)
-        self.state["rolling_summary"] = new_summary
-        print("🧠 Rolling summary compressed.")
+    async def _run_evaluator(self, phase, transcript):
+        result = await node_s_evaluator(self.llm, phase, transcript)
 
-    async def stream_step(self, transcript):
+        self.state["candidate_profile"]["scores"][phase] = result
 
-        resume_context = self.state.get("resume_context", "")
-        resume_context_block = (
-            f"\nCandidate Resume Context:\n{resume_context}\n"
-            if resume_context
-            else ""
-        )
+    async def stream_step(self, transcript: str):
 
-        if self.state["phase"] == "intro" and not self.state["last_question"]:
-            question = "Hi, thanks for joining today. Could you introduce yourself?"
-            self.state["last_question"] = question
-            yield question
+        # -------------------- INITIAL TURN --------------------
+        if self.state["phase"] == "intro" and not self.state.get("last_question"):
+            p_output = await node_p1_introduction(
+                self.llm,
+                self.state["job_role"],
+                self.state["job_description"],
+                ""
+            )
+
+            final_response = ""
+
+            async for token in node_r_generate_stream(
+                self.llm,
+                self.state,
+                p_output
+            ):
+                final_response += token
+                yield token
+
+            self.state["last_question"] = final_response
             return
 
-        last_q = self.state["last_question"]
+        # -------------------- UPDATE STATE --------------------
+        last_q = self.state.get("last_question", "")
         last_a = transcript
 
-        self.state["last_answer"] = transcript
+        self.state["last_answer"] = last_a
 
-        # Append new QA
-        self.state["rolling_summary"] += f"\nQ:{last_q}\nA:{last_a}\n"
+        # Append to phase transcript
+        self.state["phase_transcript"] = self.state.get("phase_transcript", "")
+        self.state["phase_transcript"] += f"\nInterviewer: {last_q}\nCandidate: {last_a}\n"
 
-        summary = self.state["rolling_summary"]
+        # Update counters
+        self.state["phase_question_count"] = self.state.get("phase_question_count", 0) + 1
 
-        # Trigger background summarization
-        if summary_trigger(self.state["rolling_summary"]):
-            asyncio.create_task(self.background_summarize())
+        # -------------------- SELECT PHASE NODE --------------------
+        current_phase = self.state["phase"]
 
-        # Run nodes in parallel
-        nodeA = asyncio.create_task(
-            node_a_evaluate(self.llm, last_q, last_a, summary)
-        )
+        if current_phase == "intro":
+            node_p_task = asyncio.create_task(
+                node_p1_introduction(
+                    self.llm,
+                    self.state["job_role"],
+                    self.state["job_description"],
+                    self.state["phase_transcript"]
+                )
+            )
 
-        nodeB = asyncio.create_task(
-            node_b_decide(
+        elif current_phase == "resume":
+            node_p_task = asyncio.create_task(
+                node_p2_resume_based(
+                    self.llm,
+                    self.state["job_role"],
+                    self.state["job_description"],
+                    self.state.get("resume_context", ""),
+                    self.state.get("summary_till_now", ""),
+                    self.state["phase_transcript"]
+                )
+            )
+
+        elif current_phase == "core_tech":
+            node_p_task = asyncio.create_task(
+                node_p3_core_tech(
+                    self.llm,
+                    self.state["job_role"],
+                    self.state["job_description"],
+                    self.state.get("resume_context", ""),
+                    self.state.get("summary_till_now", ""),
+                    self.state.get("list_of_technical_topics", ""),
+                    self.state["phase_transcript"]
+                )
+            )
+
+        elif current_phase == "situational":
+            node_p_task = asyncio.create_task(
+                node_p4_situational(
+                    self.llm,
+                    self.state["job_role"],
+                    self.state["job_description"],
+                    self.state.get("resume_context", ""),
+                    self.state.get("summary_till_now", ""),
+                    self.state["phase_transcript"]
+                )
+            )
+
+        elif current_phase == "closing":
+            node_p_task = asyncio.create_task(
+                node_p5_closing(
+                    self.llm,
+                    self.state["job_role"],
+                    self.state["job_description"],
+                    self.state.get("summary_till_now", ""),
+                    self.state["phase_transcript"]
+                )
+            )
+
+        else:
+            # fallback
+            node_p_task = asyncio.create_task(
+                node_p5_closing(
+                    self.llm,
+                    self.state["job_role"],
+                    self.state["job_description"],
+                    self.state.get("summary_till_now", ""),
+                    self.state["phase_transcript"]
+                )
+            )
+
+        # -------------------- NODE Q (CONTROLLER) --------------------
+        node_q_task = asyncio.create_task(
+            node_q_controller(
                 self.llm,
-                last_q,
+                self.state,
                 last_a,
-                summary,
-                self.state["asked_questions_phase"],
-                self.state["phase"],
-                self.state["question_index"],
-                self.state["followup_count"],
+                PHASE_CONFIG
             )
         )
 
-        nodeA_result, nodeB_result = await asyncio.gather(nodeA, nodeB)
+        # -------------------- PARALLEL EXECUTION --------------------
+        p_output, q_output = await asyncio.gather(node_p_task, node_q_task)
 
-        if nodeA_result["unexpFlag"]:
+        # -------------------- DECISION --------------------
+        if q_output.get("intervention_type") == "phase_transition":
+            old_phase = self.state["phase"]
+            transcript = self.state.get("phase_transcript", "")
 
-            context = f"""
-Unexpected behaviour detected.
+            # -------------------- SAVE TRANSCRIPT --------------------
+            save_phase_transcript(old_phase, transcript)
 
-Description:
-{nodeA_result["unexpDesc"]}
+            # -------------------- ASYNC EVALUATION --------------------
+            asyncio.create_task(
+                self._run_evaluator(old_phase, transcript)
+            )
 
-{resume_context_block}
+            # -------------------- UPDATE SUMMARY --------------------
+            self.state["summary_till_now"] = await update_summary(
+                self.llm,
+                self.state.get("summary_till_now", ""),
+                transcript
+            )
 
-Respond professionally and redirect interview.
-"""
+            # -------------------- SET CONTEXT FOR R --------------------
+            selected_context = q_output.get("context_for_generator", "")
+
+            # -------------------- PHASE SWITCH --------------------
+            self.state["phase"] = q_output.get("next_phase", self.state["phase"])
+            self.state["phase_question_count"] = 0
+            self.state["phase_word_count"] = 0
+            self.state["phase_transcript"] = ""
 
         else:
+            selected_context = p_output
 
-            context = f"""
-Interview Phase: {nodeB_result["nextPhase"]}
+        # -------------------- NODE R (GENERATOR) --------------------
+        final_response = ""
 
-Intent: {nodeB_result["intent"]}
-
-Reason: {nodeB_result["reason"]}
-
-Topic: {nodeB_result["topic"]}
-
-Last question: {last_q}
-
-Candidate said: {last_a}
-
-{resume_context_block}
-"""
-
-            self.state["phase"] = nodeB_result["nextPhase"]
-
-        question_buffer = ""
-
-        async for token in node_c_generate_stream(self.llm, context):
-            question_buffer += token
+        async for token in node_r_generate_stream(
+            self.llm,
+            self.state,
+            selected_context
+        ):
+            final_response += token
             yield token
 
-        self.state["last_question"] = question_buffer.strip()
-        self.state["asked_questions_phase"].append(self.state["last_question"])
+        # -------------------- UPDATE LAST QUESTION --------------------
+        self.state["last_question"] = final_response

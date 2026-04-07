@@ -1,0 +1,44 @@
+
+async def node_p3_core_tech(
+    llm,
+    job_role: str,
+    job_description: str,
+    resume_context: str,
+    summary_till_now: str,
+    list_of_technical_topics: str,
+    transcript: str = ""
+) -> str:
+    """
+    Generates interviewer response for Core Technical phase.
+    Returns plain text (not JSON).
+    """
+
+    prompt = f"""
+You are a professional interviewer conducting a {job_role} interview for a fresher.
+Phase: CORE TECHNICAL
+Tone: Conversational, Natural and Professional
+Resume Context: {resume_context}
+Job Description: {job_description}
+Summary of Previous Phases: {summary_till_now}
+Aim(in order of most variety):
+Evaluate candidate's knowledge on a variety of core technical concepts
+1) Skills relevant to JD
+2) Core CS concepts
+Task: Generate interviewer's next response in provided tone which could be a new question or a follow-up using follow-up strategy.
+Follow-up Strategy: 
+- If answer is short/incomplete/unsure: probe ONCE with a hint
+- If second answer still weak: move to next topic (max 2 follow-ups per topic)
+- Probing example: "Can you walk me through how that works step by step?"
+Rules:
+- Do not ask direct coding problems
+- Cover a variety of distinct technical areas like {list_of_technical_topics} whilst prioritizing skills relevant to JD.
+- Prefer "why" and "how" over "what"
+Conversation This Phase: if transcript exists, then {transcript} else {"Core Technical round has not started yet."}
+"""
+
+    result = ""
+
+    async for token in llm.stream_response(prompt):
+        result += token
+
+    return result.strip()
