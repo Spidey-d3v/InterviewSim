@@ -2,11 +2,42 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useVisionSession } from '../hooks/useVisionSession';
+import { createClient } from '@/utils/supabase';
+import { useVisionSession, type ChunkResult, type GazeLogEntry } from '../hooks/useVisionSession';
 import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
 import { useConvFlowRoom } from '../hooks/useConvFlowRoom';
 import { LiveKitDebugPanel } from './LiveKitDebugPanel';
 import CalibrationFlow from './CalibrationFlow';
+
+type GazeDistribution = {
+  forward: number;
+  left: number;
+  right: number;
+  down: number;
+  away: number;
+};
+
+type PersistedChunkMetric = {
+  chunk_id: string;
+  chunk_index: number;
+  question_index: number;
+  question_text: string;
+  confidence_score: number | null;
+  facial_expression_score: number | null;
+  voice_score: number | null;
+  gaze_distribution: GazeDistribution;
+};
+
+type PersistedQuestionMetric = {
+  question_index: number;
+  question_text: string;
+  chunks: PersistedChunkMetric[];
+  question_averages: {
+    confidence_score: number | null;
+    facial_expression_score: number | null;
+    voice_score: number | null;
+  };
+};
 
 export default function InterviewRoom() {
   const router = useRouter();
@@ -26,6 +57,18 @@ export default function InterviewRoom() {
   const [questionStatus, setQuestionStatus] = useState<'waiting' | 'processing' | 'streaming' | 'ready'>('waiting');
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
   const [activeQuestionStreamId, setActiveQuestionStreamId] = useState<string | null>(null);
+  const [interviewSessionId, setInterviewSessionId] = useState<string | null>(null);
+  const [interviewStartedAt, setInterviewStartedAt] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [persistingSession, setPersistingSession] = useState(false);
+  const [sessionPersisted, setSessionPersisted] = useState(false);
+  const [sessionPersistError, setSessionPersistError] = useState<string | null>(null);
+
+  const questionContextRef = useRef<{ questionIndex: number; questionText: string }>({
+    questionIndex: 0,
+    questionText: 'Introduce yourself.',
+  });
+  const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string }>>({});
 
   const handleNewQuestion = useCallback(
     (
@@ -73,6 +116,24 @@ export default function InterviewRoom() {
     error: visionError,
   } = useVisionSession();
 
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth
+      .getUser()
+      .then(({ data }) => {
+        setCurrentUserId(data.user?.id ?? null);
+      })
+      .catch(() => setCurrentUserId(null));
+  }, []);
+
+  useEffect(() => {
+    const text = (streamingQuestion ?? aiQuestions[questionIndex] ?? 'Introduce yourself.').trim();
+    questionContextRef.current = {
+      questionIndex: aiQuestions.length > 0 ? questionIndex : 0,
+      questionText: text || 'Introduce yourself.',
+    };
+  }, [aiQuestions, questionIndex, streamingQuestion]);
+
   // Chunked recorder — 15-s chunks auto-uploaded to vision_server
   const {
     stream: cameraStream,
@@ -88,6 +149,11 @@ export default function InterviewRoom() {
     releaseStream,
   } = useChunkedRecorder({
     onChunkReady: (videoPath, chunkId, chunkIndex) => {
+      const qCtx = questionContextRef.current;
+      chunkQuestionMapRef.current[chunkId] = {
+        question_index: qCtx.questionIndex,
+        question_text: qCtx.questionText,
+      };
       console.log(`📦 Chunk ${chunkIndex} ready: ${videoPath}`);
       processChunk(videoPath, chunkId, chunkIndex);
     },
@@ -188,6 +254,15 @@ export default function InterviewRoom() {
     setStreamingQuestion(null);
     setActiveQuestionStreamId(null);
     setQuestionStatus('waiting');
+    setSessionPersisted(false);
+    setSessionPersistError(null);
+    chunkQuestionMapRef.current = {};
+    setInterviewSessionId(
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `session-${Date.now()}`
+    );
+    setInterviewStartedAt(new Date().toISOString());
 
     // Enter fullscreen mode
     enterFullscreen();
@@ -212,6 +287,141 @@ export default function InterviewRoom() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const mean = (values: Array<number | null | undefined>): number | null => {
+    const nums = values.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    if (!nums.length) return null;
+    return nums.reduce((sum, n) => sum + n, 0) / nums.length;
+  };
+
+  const buildGazeDistribution = (gazeData: GazeLogEntry[]): GazeDistribution => {
+    const counts: GazeDistribution = { forward: 0, left: 0, right: 0, down: 0, away: 0 };
+    if (!gazeData.length) return counts;
+
+    for (const entry of gazeData) {
+      const status = (entry.status || '').toLowerCase();
+      if (status.includes('away')) counts.away += 1;
+      else if (status.includes('left')) counts.left += 1;
+      else if (status.includes('right')) counts.right += 1;
+      else if (status.includes('down')) counts.down += 1;
+      else counts.forward += 1;
+    }
+
+    const total = gazeData.length;
+    return {
+      forward: counts.forward / total,
+      left: counts.left / total,
+      right: counts.right / total,
+      down: counts.down / total,
+      away: counts.away / total,
+    };
+  };
+
+  const buildQuestionMetrics = useCallback((): PersistedQuestionMetric[] => {
+    const grouped = new Map<number, PersistedQuestionMetric>();
+    const sortedChunks = [...chunkResults].sort((a, b) => a.chunkIndex - b.chunkIndex);
+
+    sortedChunks.forEach((chunk: ChunkResult) => {
+      const mappedQuestion = chunkQuestionMapRef.current[chunk.chunkId] ?? {
+        question_index: 0,
+        question_text: 'Introduce yourself.',
+      };
+
+      if (!grouped.has(mappedQuestion.question_index)) {
+        grouped.set(mappedQuestion.question_index, {
+          question_index: mappedQuestion.question_index,
+          question_text: mappedQuestion.question_text,
+          chunks: [],
+          question_averages: {
+            confidence_score: null,
+            facial_expression_score: null,
+            voice_score: null,
+          },
+        });
+      }
+
+      grouped.get(mappedQuestion.question_index)?.chunks.push({
+        chunk_id: chunk.chunkId,
+        chunk_index: chunk.chunkIndex,
+        question_index: mappedQuestion.question_index,
+        question_text: mappedQuestion.question_text,
+        confidence_score:
+          chunk.predictions.length > 0
+            ? chunk.predictions[chunk.predictions.length - 1].confidence
+            : null,
+        facial_expression_score: chunk.facial_analysis?.score ?? null,
+        voice_score: chunk.voice_analysis?.score ?? null,
+        gaze_distribution: buildGazeDistribution(chunk.gaze_data),
+      });
+    });
+
+    const questions = [...grouped.values()].sort((a, b) => a.question_index - b.question_index);
+    questions.forEach((q) => {
+      q.question_averages = {
+        confidence_score: mean(q.chunks.map((c) => c.confidence_score)),
+        facial_expression_score: mean(q.chunks.map((c) => c.facial_expression_score)),
+        voice_score: mean(q.chunks.map((c) => c.voice_score)),
+      };
+    });
+
+    return questions;
+  }, [chunkResults]);
+
+  const persistInterviewSession = useCallback(async (): Promise<boolean> => {
+    if (persistingSession) return false;
+    if (sessionPersisted) return true;
+
+    if (!interviewSessionId) {
+      setSessionPersistError('Missing session id.');
+      return false;
+    }
+
+    if (!currentUserId) {
+      setSessionPersistError('No authenticated user found for saving session.');
+      return false;
+    }
+
+    setPersistingSession(true);
+    setSessionPersistError(null);
+
+    try {
+      const questionMetrics = buildQuestionMetrics();
+      const response = await fetch('http://localhost:8001/api/interview-sessions/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: interviewSessionId,
+          user_id: currentUserId,
+          started_at: interviewStartedAt,
+          completed_at: new Date().toISOString(),
+          question_metrics_json: questionMetrics,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = (await response.json().catch(() => null)) as
+          | { detail?: string }
+          | null;
+        throw new Error(errorPayload?.detail || `Session save failed with status ${response.status}`);
+      }
+
+      setSessionPersisted(true);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown persistence error';
+      setSessionPersistError(message);
+      return false;
+    } finally {
+      setPersistingSession(false);
+    }
+  }, [
+    buildQuestionMetrics,
+    currentUserId,
+    interviewSessionId,
+    interviewStartedAt,
+    persistingSession,
+    sessionPersisted,
+  ]);
 
   const handleLeave = async () => {
     // Exit fullscreen first
@@ -690,6 +900,12 @@ export default function InterviewRoom() {
                   </span>
                 )}
               </p>
+              {sessionPersisted && (
+                <p className="text-xs text-green-400 mt-2">Session analytics saved successfully.</p>
+              )}
+              {sessionPersistError && (
+                <p className="text-xs text-red-400 mt-2">Save error: {sessionPersistError}</p>
+              )}
             </div>
 
             <div className="p-6">
@@ -794,16 +1010,23 @@ export default function InterviewRoom() {
             {/* Actions */}
             <div className="p-6 border-t border-white/10 flex gap-3">
               <button
-                onClick={() => {
+                disabled={persistingSession}
+                onClick={async () => {
+                  const saved = await persistInterviewSession();
+                  if (!saved) {
+                    const shouldLeave = confirm('Could not save this session to database. Leave anyway?');
+                    if (!shouldLeave) return;
+                  }
+
                   if (pendingChunks > 0) {
                     if (!confirm(`${pendingChunks} chunk${pendingChunks !== 1 ? 's are' : ' is'} still processing. Results will be lost. Leave anyway?`)) return;
                   }
                   releaseStream();
                   router.push('/front/homepage');
                 }}
-                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
+                className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Close & Go Home
+                {persistingSession ? 'Saving Session…' : 'Close & Go Home'}
               </button>
               <button
                 disabled={pendingChunks > 0 || pendingUploads > 0}

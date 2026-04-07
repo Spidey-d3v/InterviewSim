@@ -1,7 +1,9 @@
 import asyncio
 import numpy as np
+from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from livekit import rtc
 from livekit.rtc import Room, AudioStream
 from livekit.api import AccessToken, VideoGrants
@@ -45,6 +47,69 @@ room_states = {}
 audio_sources = {}
 voice_agents = {}
 interview_engines = {}
+
+
+class GazeDistributionModel(BaseModel):
+    forward: float = 0.0
+    left: float = 0.0
+    right: float = 0.0
+    down: float = 0.0
+    away: float = 0.0
+
+
+class ChunkMetricModel(BaseModel):
+    chunk_id: str
+    chunk_index: int
+    question_index: int
+    question_text: str
+    confidence_score: Optional[float] = None
+    facial_expression_score: Optional[float] = None
+    voice_score: Optional[float] = None
+    gaze_distribution: GazeDistributionModel = Field(default_factory=GazeDistributionModel)
+
+
+class QuestionMetricModel(BaseModel):
+    question_index: int
+    question_text: str
+    chunks: list[ChunkMetricModel] = Field(default_factory=list)
+
+
+class FinalizeInterviewSessionPayload(BaseModel):
+    session_id: str
+    user_id: str
+    started_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    question_metrics_json: list[QuestionMetricModel] = Field(default_factory=list)
+
+
+def _safe_mean(values: list[Optional[float]]) -> Optional[float]:
+    nums = [v for v in values if isinstance(v, (int, float))]
+    if not nums:
+        return None
+    return float(sum(nums) / len(nums))
+
+
+def _compute_overall_gaze(chunks: list[ChunkMetricModel]) -> dict[str, dict[str, float]]:
+    if not chunks:
+        return {
+            "overall_gaze_distribution": {
+                "forward": 0.0,
+                "left": 0.0,
+                "right": 0.0,
+                "down": 0.0,
+                "away": 0.0,
+            }
+        }
+
+    return {
+        "overall_gaze_distribution": {
+            "forward": float(sum(c.gaze_distribution.forward for c in chunks) / len(chunks)),
+            "left": float(sum(c.gaze_distribution.left for c in chunks) / len(chunks)),
+            "right": float(sum(c.gaze_distribution.right for c in chunks) / len(chunks)),
+            "down": float(sum(c.gaze_distribution.down for c in chunks) / len(chunks)),
+            "away": float(sum(c.gaze_distribution.away for c in chunks) / len(chunks)),
+        }
+    }
 
 
 async def publish_new_question(
@@ -289,6 +354,40 @@ async def parse_resume(
 
     except Exception as e:
         print(f"❌ Resume Parsing Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/interview-sessions/finalize")
+async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
+    try:
+        all_chunks: list[ChunkMetricModel] = []
+        for question in payload.question_metrics_json:
+            all_chunks.extend(question.chunks)
+
+        row = {
+            "session_id": payload.session_id,
+            "user_id": payload.user_id,
+            "started_at": payload.started_at,
+            "completed_at": payload.completed_at,
+            "question_metrics_json": [q.model_dump() for q in payload.question_metrics_json],
+            "overall_confidence_score": _safe_mean([c.confidence_score for c in all_chunks]),
+            "overall_facial_expression_score": _safe_mean([c.facial_expression_score for c in all_chunks]),
+            "overall_voice_score": _safe_mean([c.voice_score for c in all_chunks]),
+            "total_questions": len(payload.question_metrics_json),
+            "total_chunks": len(all_chunks),
+            **_compute_overall_gaze(all_chunks),
+        }
+
+        supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+
+        return {
+            "status": "success",
+            "session_id": payload.session_id,
+            "total_questions": row["total_questions"],
+            "total_chunks": row["total_chunks"],
+        }
+    except Exception as e:
+        print(f"❌ Session finalize error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------- LiveKit Agent --------------------
