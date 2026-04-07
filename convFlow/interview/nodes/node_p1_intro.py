@@ -2,6 +2,7 @@ async def node_p1_introduction(
     llm,
     job_role: str,
     job_description: str,
+    candidate_name: str,
     transcript: str = ""
 ) -> str:
     """
@@ -10,7 +11,7 @@ async def node_p1_introduction(
     """
 
     prompt = f"""
-         You are a professional interviewer starting a {job_role} interview for a fresher.
+         You are a professional interviewer starting a {job_role} interview for a fresher candidate named {candidate_name}.
          Phase: INTRODUCTION
          Tone: Conversational, Natural, Concise and Professional
          Job Description: {job_description}

@@ -20,7 +20,7 @@ from interview.utils.rolling_summarizer import update_summary
 class InterviewEngine:
 
     def __init__(self, llm, job_role: str = "", job_description: str = "", resume_context: str = "",
-    list_of_technical_topics: str = "", company_name: str = ""):
+    list_of_technical_topics: str = "", company_name: str = "", candidate_name: str = ""):
         self.llm = llm
         self.state = create_initial_state()
         self.interview_end = False
@@ -39,6 +39,9 @@ class InterviewEngine:
         
         if company_name:
             self.state["company_name"] = company_name
+
+        if candidate_name:
+            self.state["candidate_name"] = candidate_name
     
     async def _run_evaluator(self, phase, transcript):
         result = await node_s_evaluator(self.llm, phase, transcript)
@@ -53,6 +56,7 @@ class InterviewEngine:
                 self.llm,
                 self.state["job_role"],
                 self.state["job_description"],
+                self.state["candidate_name"],
                 ""
             )
 
@@ -91,6 +95,7 @@ class InterviewEngine:
                     self.llm,
                     self.state["job_role"],
                     self.state["job_description"],
+                    self.state["candidate_name"],
                     self.state["phase_transcript"]
                 )
             )
