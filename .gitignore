@@ -22,3 +22,7 @@ converted_*.wav
 .env.local
 .env
 
+
+*.ps1
+*.cmd
+
