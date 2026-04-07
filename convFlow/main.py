@@ -1,6 +1,6 @@
 import asyncio
 import numpy as np
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from livekit import rtc
 from livekit.rtc import Room, AudioStream
@@ -102,9 +102,35 @@ def create_token(identity: str, room_name: str):
     return token.to_jwt()
 
 @app.get("/token")
-async def token():
+async def token(user_id: str | None = Query(default=None)):
     room_name = f"interview_{uuid4().hex}"
     identity = "browser-user"
+
+    resume_context = ""
+    if user_id:
+        try:
+            profile_res = (
+                supabase.table("profiles")
+                .select("resume_text, resume_json")
+                .eq("id", user_id)
+                .limit(1)
+                .execute()
+            )
+
+            profile = None
+            if profile_res.data:
+                profile = profile_res.data[0] if isinstance(profile_res.data, list) else profile_res.data
+
+            if profile:
+                resume_text = (profile.get("resume_text") or "").strip()
+                resume_json = profile.get("resume_json")
+
+                if resume_text:
+                    resume_context += f"Resume Text:\n{resume_text[:3000]}\n\n"
+                if resume_json:
+                    resume_context += f"Resume JSON:\n{json.dumps(resume_json)[:3000]}"
+        except Exception as e:
+            print(f"⚠️ Could not load resume context for user {user_id}: {e}")
 
     token = create_token(identity, room_name)
 
@@ -132,7 +158,7 @@ async def token():
     }
 
     audio_source = rtc.AudioSource(sample_rate=48000, num_channels=1)
-    interview_engines[room_name] = InterviewEngine(llm)
+    interview_engines[room_name] = InterviewEngine(llm, resume_context=resume_context)
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
     async def start_interview():
         await asyncio.sleep(1)
