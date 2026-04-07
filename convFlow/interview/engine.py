@@ -11,10 +11,11 @@ from interview.utils.summary_utils import summary_trigger
 
 class InterviewEngine:
 
-    def __init__(self, llm):
+    def __init__(self, llm, resume_context: str = ""):
 
         self.llm = llm
         self.state = create_initial_state()
+        self.state["resume_context"] = resume_context or ""
     
     async def background_summarize(self):
         summary = self.state["rolling_summary"]
@@ -23,6 +24,13 @@ class InterviewEngine:
         print("🧠 Rolling summary compressed.")
 
     async def stream_step(self, transcript):
+
+        resume_context = self.state.get("resume_context", "")
+        resume_context_block = (
+            f"\nCandidate Resume Context:\n{resume_context}\n"
+            if resume_context
+            else ""
+        )
 
         if self.state["phase"] == "intro" and not self.state["last_question"]:
             question = "Hi, thanks for joining today. Could you introduce yourself?"
@@ -72,6 +80,8 @@ Unexpected behaviour detected.
 Description:
 {nodeA_result["unexpDesc"]}
 
+{resume_context_block}
+
 Respond professionally and redirect interview.
 """
 
@@ -89,6 +99,8 @@ Topic: {nodeB_result["topic"]}
 Last question: {last_q}
 
 Candidate said: {last_a}
+
+{resume_context_block}
 """
 
             self.state["phase"] = nodeB_result["nextPhase"]
