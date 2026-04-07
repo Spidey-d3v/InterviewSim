@@ -131,7 +131,7 @@ async def publish_new_question(
         "event": "new_question",
         "question_text": question_text.strip(),
         "phase": state.get("phase"),
-        "turn_index": len(state.get("asked_questions_phase", [])),
+        "turn_index": state.get("phase_question_count", 0),
         "stream_id": stream_id,
         "is_final": is_final,
         "ts": time.time(),

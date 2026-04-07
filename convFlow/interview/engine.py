@@ -3,12 +3,12 @@ import asyncio
 from interview.init_state import create_initial_state
 
 # Phase Nodes
-from convFlow.interview.nodes.node_p1_intro import node_p1_introduction
-from convFlow.interview.nodes.node_p2_resume import node_p2_resume_based
+from interview.nodes.node_p1_intro import node_p1_introduction
+from interview.nodes.node_p2_resume import node_p2_resume_based
 from interview.nodes.node_p3_core_tech import node_p3_core_tech
 from interview.nodes.node_p4_situational import node_p4_situational
 from interview.nodes.node_p5_closing import node_p5_closing
-from utils.transcript_utils import save_phase_transcript
+from interview.utils.transcript_utils import save_phase_transcript
 from interview.nodes.node_s_evaluator import node_s_evaluator
 # Controller
 from interview.nodes.node_q_controller import node_q_controller
@@ -19,13 +19,26 @@ from interview.utils.rolling_summarizer import update_summary
 
 class InterviewEngine:
 
-    def __init__(self, llm, job_role: str = "", job_description: str = "", resume_context: str = ""):
+    def __init__(self, llm, job_role: str = "", job_description: str = "", resume_context: str = "",
+    list_of_technical_topics: str = "", company_name: str = ""):
         self.llm = llm
         self.state = create_initial_state()
+        self.interview_end = False
 
-        self.state["job_role"] = job_role
-        self.state["job_description"] = job_description
-        self.state["resume_context"] = resume_context
+        if job_role:
+            self.state["job_role"] = job_role
+
+        if job_description:
+            self.state["job_description"] = job_description
+
+        if resume_context:
+            self.state["resume_context"] = resume_context
+
+        if list_of_technical_topics:
+            self.state["list_of_technical_topics"] = list_of_technical_topics
+        
+        if company_name:
+            self.state["company_name"] = company_name
     
     async def _run_evaluator(self, phase, transcript):
         result = await node_s_evaluator(self.llm, phase, transcript)
@@ -155,6 +168,10 @@ class InterviewEngine:
         # -------------------- PARALLEL EXECUTION --------------------
         p_output, q_output = await asyncio.gather(node_p_task, node_q_task)
 
+        # Update flag if controller signals termination (e.g., abusive behavior)
+        if q_output.get("should_terminate"):
+            self.interview_end = True
+
         # -------------------- DECISION --------------------
         if q_output.get("intervention_type") == "phase_transition":
             old_phase = self.state["phase"]
@@ -162,6 +179,10 @@ class InterviewEngine:
 
             # -------------------- SAVE TRANSCRIPT --------------------
             save_phase_transcript(old_phase, transcript)
+
+            # Check if moving past the final phase
+            if old_phase == "closing":
+                self.interview_end = True
 
             # -------------------- ASYNC EVALUATION --------------------
             asyncio.create_task(
