@@ -36,10 +36,23 @@ export interface VoiceAnalysis {
   error: string | null;
 }
 
+export interface GazeSummary {
+  total_frames: number;
+  looking_forward: number;
+  looking_left: number;
+  looking_right: number;
+  looking_away: number;
+  looking_forward_pct: number;
+  looking_left_pct: number;
+  looking_right_pct: number;
+  looking_away_pct: number;
+}
+
 export interface ChunkResult {
   chunkId: string;
   chunkIndex: number;
   gaze_data: GazeLogEntry[];
+  gaze_summary: GazeSummary | null;
   predictions: PredictionEntry[];
   inference_summary: PredictionSummary | null;
   voice_analysis: VoiceAnalysis | null;
@@ -89,6 +102,8 @@ export function useVisionSession() {
   const outboundQueueRef = useRef<string[]>([]);
   // Per-chunk timeout handles — cleared when chunk_processed/chunk_error arrives
   const chunkTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // Prevent duplicate chunk entries when replayed results arrive after reconnect.
+  const seenChunkIdsRef = useRef<Set<string>>(new Set());
 
   const _sendOrQueue = useCallback((payload: object) => {
     const json = JSON.stringify(payload);
@@ -113,8 +128,11 @@ export function useVisionSession() {
       const ws = new WebSocket('ws://localhost:8000/ws');
       
       ws.onopen = () => {
-        console.log('✓ Connected to vision server');        reconnectAttemptsRef.current = 0;  // reset on successful connect        setIsConnected(true);
+        console.log('✓ Connected to vision server');
+        reconnectAttemptsRef.current = 0;  // reset on successful connect
+        setIsConnected(true);
         setError(null);
+        ws.send(JSON.stringify({ action: 'replay_chunk_results' }));
         // Flush any queued messages
         const queue = outboundQueueRef.current.splice(0);
         queue.forEach((msg) => ws.send(msg));
@@ -163,6 +181,16 @@ export function useVisionSession() {
 
           case 'chunk_processed': {
             _clearChunkTimeout(message.chunk_id);
+            if (seenChunkIdsRef.current.has(message.chunk_id)) {
+              setProcessingChunks((prev) => {
+                const next = new Set(prev);
+                next.delete(message.chunk_id);
+                return next;
+              });
+              break;
+            }
+
+            seenChunkIdsRef.current.add(message.chunk_id);
             // Strip bulky arrays (energy, pitch_proxy) from voice_analysis before storing
             const rawVoice = message.voice_analysis;
             const voice_analysis: VoiceAnalysis | null = rawVoice
@@ -177,6 +205,7 @@ export function useVisionSession() {
               chunkId: message.chunk_id,
               chunkIndex: message.chunk_index ?? 0,
               gaze_data: message.gaze_data || [],
+              gaze_summary: message.gaze_summary || null,
               predictions: message.predictions || [],
               inference_summary: message.inference_summary || null,
               voice_analysis,
@@ -204,6 +233,12 @@ export function useVisionSession() {
             });
             break;
           }
+
+          case 'replay_complete':
+            console.log(
+              `[useVisionSession] Replay complete: sent=${message.sent_count ?? 0}, pending=${message.pending_count ?? 0}`
+            );
+            break;
 
           case 'chunk_error':
             console.error('Chunk processing error:', message.chunk_id, message.message);
@@ -292,6 +327,7 @@ export function useVisionSession() {
    */
   const processChunk = useCallback(
     (videoPath: string, chunkId: string, chunkIndex: number = 0) => {
+      seenChunkIdsRef.current.delete(chunkId);
       setProcessingChunks((prev) => new Set(prev).add(chunkId));
 
       // 2-minute timeout — if server never responds, clear the spinner
