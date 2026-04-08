@@ -58,6 +58,7 @@ class InterviewEngine:
                 self.state["company_name"],
                 self.state["job_description"],
                 self.state["candidate_name"],
+                self.state.get("resume_context", ""),
                 ""
             )
 
@@ -98,6 +99,7 @@ class InterviewEngine:
                     self.state["company_name"],
                     self.state["job_description"],
                     self.state["candidate_name"],
+                    self.state.get("resume_context", ""),
                     self.state["phase_transcript"]
                 )
             )

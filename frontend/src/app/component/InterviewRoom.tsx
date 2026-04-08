@@ -485,125 +485,76 @@ export default function InterviewRoom() {
 
     const scoreCell = (v: number | null): string => (v == null || !Number.isFinite(v) ? 'N/A' : `${(v * 100).toFixed(1)}%`);
 
-    const questionRows = questionMetrics
-      .map(
-        (q, idx) => `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${q.question_text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
-            <td>${scoreCell(q.question_averages.confidence_score)}</td>
-            <td>${scoreCell(q.question_averages.voice_score)}</td>
-            <td>${scoreCell(q.question_averages.facial_expression_score)}</td>
-            <td>${q.chunks.length}</td>
-          </tr>
-        `
-      )
-      .join('');
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'a4',
+    });
 
-    const reportHtml = `
-  <style>
-    #pdf-report-root { font-family: Arial, sans-serif; color: #111; width: 1024px; background: #fff; padding: 24px; box-sizing: border-box; }
-    #pdf-report-root h1 { margin: 0 0 4px 0; }
-    #pdf-report-root .meta { color: #555; margin-bottom: 20px; line-height: 1.45; }
-    #pdf-report-root .grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
-    #pdf-report-root .grid3 { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
-    #pdf-report-root .card { border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
-    #pdf-report-root .label { font-size: 12px; color: #666; }
-    #pdf-report-root .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
-    #pdf-report-root table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    #pdf-report-root th, #pdf-report-root td { border: 1px solid #ddd; padding: 8px; font-size: 13px; text-align: left; vertical-align: top; }
-    #pdf-report-root th { background: #f6f6f6; }
-    #pdf-report-root .small { color: #666; font-size: 12px; margin-top: 12px; }
-  </style>
-  <div id="pdf-report-root">
-    <h1>InterviewAR Report</h1>
-    <div class="meta">
-      Session: ${interviewSessionId ?? 'N/A'}<br/>
-      User: ${currentUserId ?? 'N/A'}<br/>
-      Started: ${started ? started.toISOString() : 'N/A'}<br/>
-      Completed: ${ended.toISOString()}<br/>
-      Duration: ${durationSeconds}s
-    </div>
+    const margin = 40;
+    const lineHeight = 16;
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const contentWidth = pageWidth - margin * 2;
+    let y = margin;
 
-    <div class="grid">
-      <div class="card"><div class="label">Focus Score</div><div class="value">${focusPct.toFixed(1)}%</div></div>
-      <div class="card"><div class="label">Avg Confidence</div><div class="value">${avgConfidence == null ? 'N/A' : `${avgConfidence.toFixed(1)}%`}</div></div>
-      <div class="card"><div class="label">Voice Skills</div><div class="value">${avgVoice == null ? 'N/A' : `${avgVoice.toFixed(1)}%`}</div></div>
-      <div class="card"><div class="label">Facial Expression</div><div class="value">${avgFacial == null ? 'N/A' : `${avgFacial.toFixed(1)}%`}</div></div>
-    </div>
+    const ensureSpace = (requiredHeight = lineHeight) => {
+      if (y + requiredHeight <= pageHeight - margin) return;
+      pdf.addPage();
+      y = margin;
+    };
 
-    <div class="grid grid3">
-      <div class="card"><div class="label">Overall Score</div><div class="value">${overall.toFixed(1)}%</div></div>
-      <div class="card"><div class="label">Total Chunks</div><div class="value">${chunkResults.length}</div></div>
-      <div class="card"><div class="label">Total Questions</div><div class="value">${questionMetrics.length}</div></div>
-    </div>
-
-    <h2>Question-wise Breakdown</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Question</th>
-          <th>Confidence</th>
-          <th>Voice</th>
-          <th>Facial</th>
-          <th>Chunks</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${questionRows || '<tr><td colspan="6">No question metrics available.</td></tr>'}
-      </tbody>
-    </table>
-
-    <div class="small">Generated from actual session data only (no synthetic placeholders).</div>
-  </div>`;
-
-    const mount = document.createElement('div');
-    mount.style.position = 'fixed';
-    mount.style.left = '0';
-    mount.style.top = '0';
-    mount.style.opacity = '0';
-    mount.style.pointerEvents = 'none';
-    mount.style.zIndex = '-1';
-    mount.innerHTML = reportHtml;
-    document.body.appendChild(mount);
-
-    try {
-      const page = mount.querySelector('#pdf-report-root') as HTMLElement | null;
-      if (!page) throw new Error('Report render node missing');
-
-      // Let the browser apply layout/styles before html2canvas capture.
-      await new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-      );
-
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4',
+    const addWrappedText = (
+      text: string,
+      options?: { bold?: boolean; size?: number; bottomGap?: number }
+    ) => {
+      pdf.setFont('helvetica', options?.bold ? 'bold' : 'normal');
+      pdf.setFontSize(options?.size ?? 11);
+      const lines = pdf.splitTextToSize(text, contentWidth) as string[];
+      lines.forEach((line) => {
+        ensureSpace();
+        pdf.text(line, margin, y);
+        y += lineHeight;
       });
+      if (options?.bottomGap) y += options.bottomGap;
+    };
 
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const horizontalMargin = 24;
+    addWrappedText('InterviewAR Report', { bold: true, size: 18, bottomGap: 6 });
+    addWrappedText(`Session: ${interviewSessionId ?? 'N/A'}`);
+    addWrappedText(`User: ${currentUserId ?? 'N/A'}`);
+    addWrappedText(`Started: ${started ? started.toISOString() : 'N/A'}`);
+    addWrappedText(`Completed: ${ended.toISOString()}`);
+    addWrappedText(`Duration: ${durationSeconds}s`, { bottomGap: 8 });
 
-      await pdf.html(page, {
-        x: horizontalMargin,
-        y: 24,
-        width: pageWidth - horizontalMargin * 2,
-        windowWidth: 1024,
-        autoPaging: 'text',
-        html2canvas: {
-          scale: 1,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-        },
+    addWrappedText('Summary Scores', { bold: true, size: 14, bottomGap: 4 });
+    addWrappedText(`Focus Score: ${focusPct.toFixed(1)}%`);
+    addWrappedText(`Average Confidence: ${avgConfidence == null ? 'N/A' : `${avgConfidence.toFixed(1)}%`}`);
+    addWrappedText(`Voice Skills: ${avgVoice == null ? 'N/A' : `${avgVoice.toFixed(1)}%`}`);
+    addWrappedText(`Facial Expression: ${avgFacial == null ? 'N/A' : `${avgFacial.toFixed(1)}%`}`);
+    addWrappedText(`Overall Score: ${overall.toFixed(1)}%`);
+    addWrappedText(`Total Chunks: ${chunkResults.length}`);
+    addWrappedText(`Total Questions: ${questionMetrics.length}`, { bottomGap: 8 });
+
+    addWrappedText('Question-wise Breakdown', { bold: true, size: 14, bottomGap: 4 });
+
+    if (questionMetrics.length === 0) {
+      addWrappedText('No question metrics available.', { bottomGap: 8 });
+    } else {
+      questionMetrics.forEach((q, idx) => {
+        ensureSpace(lineHeight * 6);
+        addWrappedText(`${idx + 1}. ${q.question_text}`, { bold: true });
+        addWrappedText(`Confidence: ${scoreCell(q.question_averages.confidence_score)}`);
+        addWrappedText(`Voice: ${scoreCell(q.question_averages.voice_score)}`);
+        addWrappedText(`Facial: ${scoreCell(q.question_averages.facial_expression_score)}`);
+        addWrappedText(`Chunks: ${q.chunks.length}`, { bottomGap: 6 });
       });
-
-      pdf.save(`interview-report-${interviewSessionId ?? Date.now()}.pdf`);
-    } finally {
-      document.body.removeChild(mount);
     }
+
+    addWrappedText('Generated from actual session data only (no synthetic placeholders).', {
+      size: 10,
+    });
+
+    pdf.save(`interview-report-${interviewSessionId ?? Date.now()}.pdf`);
   }, [
     buildQuestionMetrics,
     chunkResults,
@@ -647,6 +598,8 @@ export default function InterviewRoom() {
     onInterviewEnd: handleInterviewEnd,
     onNewQuestion: handleNewQuestion,
     stream: cameraStream,
+    userId: currentUserId,
+    enabled: interviewStarted,
   });
 
   return (

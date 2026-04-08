@@ -17,9 +17,18 @@ interface UseConvFlowRoomOptions {
     meta?: { phase?: string; turnIndex?: number; ts?: number; streamId?: string; isFinal?: boolean }
   ) => void;
   stream: MediaStream | null;
+  userId: string | null;
+  enabled: boolean;
 }
 
-export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stream }: UseConvFlowRoomOptions) {
+export function useConvFlowRoom({
+  onTurnEnd,
+  onInterviewEnd,
+  onNewQuestion,
+  stream,
+  userId,
+  enabled,
+}: UseConvFlowRoomOptions) {
   const onTurnEndRef = useRef(onTurnEnd);
   const onInterviewEndRef = useRef(onInterviewEnd);
   const onNewQuestionRef = useRef(onNewQuestion);
@@ -38,8 +47,8 @@ export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stre
   }, [onInterviewEnd]);
 
   useEffect(() => {
-    // We only connect if the parent has provided a stream
-    if (!stream) return;
+    // Strict gating: connect only after calibration/start and user identity are ready.
+    if (!enabled || !stream || !userId) return;
     const activeStream = stream;
 
     const room = new Room();
@@ -94,7 +103,7 @@ export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stre
 
     async function connect() {
       try {
-        const res = await fetch(`${CONVFLOW_BACKEND}/token`);
+        const res = await fetch(`${CONVFLOW_BACKEND}/token?user_id=${encodeURIComponent(userId)}`);
         const { token } = await res.json();
         await room.connect(LIVEKIT_URL, token);
         console.log("✅ Connected to Agent Room");
@@ -116,5 +125,5 @@ export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stre
       console.log("🧹 Cleanup");
       room.disconnect();
     };
-  }, [stream]); // Re-connect simple logic
+  }, [enabled, stream, userId]); // Re-connect simple logic
 }

@@ -4,6 +4,7 @@ async def node_p1_introduction(
     company_name: str,
     job_description: str,
     candidate_name: str,
+    resume_context: str = "",
     transcript: str = ""
 ) -> str:
     """
@@ -15,6 +16,7 @@ async def node_p1_introduction(
          You are a professional interviewer starting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
          Phase: INTRODUCTION
          Tone: Conversational, Natural, Concise and Professional
+         Resume Context: {resume_context}
          Job Description: {job_description}
          Aim(in order):
          1. Welcome the candidate and briefly introduce {company_name} and the role (1-2 lines)
