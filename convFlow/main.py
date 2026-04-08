@@ -484,4 +484,11 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                     except Exception as e:
                         print(f"⚠️ Failed to handle/publish AI question for {room_name}: {e}")
                     finally:
+                        # Reset everything AGAIN after speaking to ensure 
+                        # any "barge-in" audio recorded during TTS is discarded
+                        buffer.reset()
+                        progressive_stt.reset()
+                        state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                        state["smart_turn_checked"] = False
+                        
                         state["tts_busy"] = False
