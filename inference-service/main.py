@@ -45,7 +45,11 @@ async def parse_resume(
         payload = {
             "contents": [{
                 "parts": [{
-                    "text": f"Extract ONLY skills (list) and experience (list of objects) from this resume. Return raw JSON: {raw_text}"
+                    "text": (
+                        "Extract candidate_name (string), skills (list), and experience (list of objects) "
+                        "from this resume. Return ONLY raw JSON with keys: candidate_name, skills, experience. "
+                        f"Resume text: {raw_text}"
+                    )
                 }]
             }],
             "generationConfig": {"response_mime_type": "application/json"}

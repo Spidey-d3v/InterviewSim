@@ -89,6 +89,12 @@ def _safe_mean(values: list[Optional[float]]) -> Optional[float]:
     return float(sum(nums) / len(nums))
 
 
+def _clamp_01(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return float(max(0.0, min(1.0, value)))
+
+
 def _compute_overall_gaze(chunks: list[ChunkMetricModel]) -> dict[str, dict[str, float]]:
     if not chunks:
         return {
@@ -270,8 +276,6 @@ async def token(user_id: str | None = Query(default=None)):
                 asyncio.get_event_loop().time(),
                 on_question_update=on_question_update,
             )
-            fallback_question = first_question or interview_engines[room_name].state.get("last_question")
-            await publish_new_question(room_name, fallback_question, stream_id=stream_id, is_final=True)
         except Exception as e:
             print(f"⚠️ Failed to publish initial question for {room_name}: {e}")
     asyncio.create_task(start_interview())
@@ -330,7 +334,11 @@ async def parse_resume(
         payload = {
             "contents": [{
                 "parts": [{
-                    "text": f"Extract ONLY skills (list) and experience (list of objects) from this resume. Return raw JSON: {raw_text}"
+                    "text": (
+                        "Extract candidate_name (string), skills (list), and experience (list of objects) "
+                        "from this resume. Return ONLY raw JSON with keys: candidate_name, skills, experience. "
+                        f"Resume text: {raw_text}"
+                    )
                 }]
             }],
             "generationConfig": {"response_mime_type": "application/json"}
@@ -370,9 +378,9 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             "started_at": payload.started_at,
             "completed_at": payload.completed_at,
             "question_metrics_json": [q.model_dump() for q in payload.question_metrics_json],
-            "overall_confidence_score": _safe_mean([c.confidence_score for c in all_chunks]),
-            "overall_facial_expression_score": _safe_mean([c.facial_expression_score for c in all_chunks]),
-            "overall_voice_score": _safe_mean([c.voice_score for c in all_chunks]),
+            "overall_confidence_score": _clamp_01(_safe_mean([c.confidence_score for c in all_chunks])),
+            "overall_facial_expression_score": _clamp_01(_safe_mean([c.facial_expression_score for c in all_chunks])),
+            "overall_voice_score": _clamp_01(_safe_mean([c.voice_score for c in all_chunks])),
             "total_questions": len(payload.question_metrics_json),
             "total_chunks": len(all_chunks),
             **_compute_overall_gaze(all_chunks),
@@ -473,8 +481,6 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                             stt_done_time,
                             on_question_update=on_question_update,
                         )
-                        fallback_question = generated_question or interview_engines[room_name].state.get("last_question")
-                        await publish_new_question(room_name, fallback_question, stream_id=stream_id, is_final=True)
                     except Exception as e:
                         print(f"⚠️ Failed to handle/publish AI question for {room_name}: {e}")
                     finally:
