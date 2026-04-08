@@ -2,7 +2,7 @@ def create_initial_state():
     return {
         # Core flow
         "phase": "intro",
-        "candidate_name": "Gaurav",
+        "candidate_name": "",
 
         # Turn tracking
         "last_question": "",

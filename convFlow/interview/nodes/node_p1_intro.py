@@ -12,8 +12,11 @@ async def node_p1_introduction(
     Returns plain text (not JSON).
     """
 
+    candidate_ref = candidate_name if candidate_name else "the candidate"
+    transcript_context = transcript if transcript.strip() else "Interview has not started yet."
+
     prompt = f"""
-         You are a professional interviewer starting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
+         You are a professional interviewer starting a {job_role} interview at {company_name} for a fresher candidate named {candidate_ref}.
          Phase: INTRODUCTION
          Tone: Conversational, Natural, Concise and Professional
          Resume Context: {resume_context}
@@ -24,10 +27,13 @@ async def node_p1_introduction(
             - introduce themselves
             - explain their background
             - explain why they are a good fit
-         Task: Generate interviewer's next response in provided tone. Probe for further information if answer seems too short or incomplete. 
+         Task: Generate interviewer's next response in provided tone.
+         If the interview has not started yet, generate the opening welcome + first intro question only.
+         If transcript exists, you may probe for further information if answer seems too short or incomplete.
          Rules:
          - Combine questions into one smooth opening
-         Conversation This Phase: if transcript exists, then {transcript} else {"Interview has not started"}
+         - Do not assume the candidate already answered when interview has not started yet
+         Conversation This Phase: {transcript_context}
          """
 
     result = ""

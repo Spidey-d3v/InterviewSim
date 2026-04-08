@@ -402,8 +402,8 @@ class GazeAnalyzer:
         _ffmpeg = os.environ.get("FFMPEG_PATH", "ffmpeg")
         cmd = [
             _ffmpeg, "-y", "-i", input_path,
-            "-vf", "fps=30",
-            "-r", "30",
+            "-vf", "fps=27",
+            "-r", "27",
             "-vcodec", "libx264", "-preset", "ultrafast",
             "-pix_fmt", "yuv420p",
             "-acodec", "aac", "-strict", "experimental",

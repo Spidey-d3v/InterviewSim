@@ -1,25 +1,8 @@
 
-Interviewer: Hi Gaurav, thanks for joining us today! We're excited to talk to you about our entry-level Full Stack Developer position, where you'll get to build and maintain web applications from the ground up. To start, could you tell us a bit about yourself, your background, and what makes you a great fit for this role?
-Candidate: nan Obviously you have read my resume, so you can ask me about any of the projects. You have seen all the projects in my resume. You can list them and I will answer all the doubts you have about me 1 by 1, question wise.
+Interviewer: That's great to hear, Gaurav! It sounds like you have a solid foundation and a genuine enthusiasm for full-stack development. We're really looking for that passion here at GST.
 
-Interviewer: That's a great approach, Gaurav! I appreciate you being so direct. We definitely want to dive into your projects. Before we do, though, could you give us a brief overview of your journey into full-stack development? What sparked your interest, and what key experiences have shaped your skills for this kind of role?
-Candidate: If that sounds ok to you.
+Now, to get a better understanding of your technical skills, could you walk me through a project you're particularly proud of? It could be something from your coursework, a personal project, or even an open-source contribution. Tell me about the technologies you used, the challenges you faced, and how you overcame them.
+Candidate: Vah compatible nahin hai islie touch mein. Call back karne phir.
 
-Interviewer: "Absolutely, Gaurav! That sounds perfectly fine. I'm eager to hear about your journey into full-stack development. What initially drew you to it, and what experiences have been most instrumental in building your skills for this type of role?"
-Candidate: Ok. Hi. Hello. Yes, hi bhai. All good. Ok.
-
-Interviewer: That's great to hear, Gaurav! So, what initially sparked your interest in full-stack development? Was there a particular project or experience that made you realize this was the path for you?
-Candidate: Nahin, yah jab bol raha tha tabhi mainne bola tha yah random chizen. Haan, audio. Haan, audio ismen aaj par ja rahi hai, start hota ja rahi hai. Haan, bas yah vaala change karke puchh kar dena. Yah ruk kaise ki aap sun kaise nahin pa raha hai mere ko hi.
-
-Interviewer: Thanks for sharing that, Gaurav. It sounds like you have a lot of enthusiasm for the technical aspects of audio processing.
-
-To shift gears a bit and talk more about your overall journey, what initially sparked your interest in full-stack development? Was there a particular project or experience that made you realize this was the path for you?
-Candidate: Thik hai, mainne sab main kar deta hoon ek baar kuchh.
-
-Interviewer: That's an interesting way to put it, Gaurav! It sounds like you're eager to dive in.
-
-Let's go back to what we were discussing. You mentioned your enthusiasm for the technical aspects of audio processing. To shift gears a bit and talk more about your overall journey, what initially sparked your interest in full-stack development? Was there a particular project or experience that made you realize this was the path for you?
-Candidate: nan Can we end this interview? Can we end this interview?
-
-Interviewer: Gaurav, I understand. It seems like you're not interested in continuing with this interview today. I appreciate you taking the time to speak with me, and I wish you the best in your job search.
-Candidate: Bhai kuchh print kara den yahaan par hai na? Haan na, to at least mere ko samajh raha hai kyonki end ho chuka hai. Ab I think end ho jaana chaahie. Usne bola all the best in your job search. Hi.
+Interviewer: "I'm sorry, Gaurav, I didn't quite catch that. Could you please repeat what you said?"
+Candidate: nan Haan, vah pahle. Karta hoon main iska kuchh dekhata hoon. nan Tum log phookhoge? Nahin, mushkil nahin. Nahin, tum chhasaoge to phookhoge. Thoda nahin phookhoge. Too bas quantity members dhoondh raha hai kya? Nahin nahin main. Main puchh raha hoon score Achchha. Nahin nahin yaar. Puchh liya usse ek baar. Pahle mana pahle kuchh bola nahin hai unhonne. Ab kah rahe hain chal denge. Lekin main jo extra lagenge to mana kar diya ki extra to karega vah tumhen. nan Tumhaare luck kitne rahe hain aise abhi? BNB, BNB ka sirph saadhe chhah sau lag gae hain shaayad. Saadhe chhah sau lag gae hain. Saadhe chhah sau lag gae hain. Saadhe chhah sau lag gae hain. Achchha. Jo jitni piega kya piega vah dekhate hain. Jo jitni piega. Haan, yah to na, ML naapka hoga. Tanvay yaar abhi ke lie thik hai. Thik hai. Chaubis piece chikran mil jaate hain paanch sau. Paanch sau. Yah dekh yah bhi aa jaata hai kuchh samaj break down. Haan, nahin tha. Pahla question ki that's late too yah. But toone vah pack kar liya. Yaar ek kaam karo tum log jao. Main aata hoon. Kya ho gaya? Aata hoon bas ek issue fix karke aata hoon. Are bhai kabhi khatm nahin ho gaya. Aaj khatm nahin jaega mujhe. Abhi normally bhi to aise hi lage rahte hain. Yah bahan chuke kabhi kabhi to kuchh ho jae. Kabhi satisfaction bhi nahin milti chhootega.

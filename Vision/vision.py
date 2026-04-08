@@ -848,7 +848,13 @@ def analyze_video(video_path: str, session_id: str = "default", speed: float = 1
         print(f"[analyze_video] Cannot open: {video_path}", flush=True)
         return []
 
-    _fps_v    = _cap.get(cv2.CAP_PROP_FPS) or 30.0
+    _fps_v = _cap.get(cv2.CAP_PROP_FPS)
+    if _fps_v is None or not np.isfinite(_fps_v) or _fps_v <= 0:
+        _fps_v = 30.0
+    _TARGET_GAZE_FPS = 27.0
+    _sample_dt = 1.0 / _TARGET_GAZE_FPS
+    _next_sample_t = 0.0
+    _frame_idx = 0
     _frame_dt = 1.0 / _fps_v
     _w        = int(_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     _h        = int(_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -899,7 +905,12 @@ def analyze_video(video_path: str, session_id: str = "default", speed: float = 1
                 if not _ret:
                     break
 
+                _t_cur = _frame_idx / _fps_v
+                _frame_idx += 1
                 _virtual_time += _frame_dt * speed
+                if _t_cur + 1e-9 < _next_sample_t:
+                    continue
+                _next_sample_t += _sample_dt
 
                 _results = _face_mesh.process(cv2.cvtColor(_frame, cv2.COLOR_BGR2RGB))
                 if not _results.multi_face_landmarks:

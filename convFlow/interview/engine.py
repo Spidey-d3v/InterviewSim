@@ -62,15 +62,9 @@ class InterviewEngine:
                 ""
             )
 
-            final_response = ""
-
-            async for token in node_r_generate_stream(
-                self.llm,
-                self.state,
-                p_output
-            ):
-                final_response += token
-                yield token
+            final_response = (p_output or "").strip()
+            if final_response:
+                yield final_response
 
             self.state["last_question"] = final_response
             return
