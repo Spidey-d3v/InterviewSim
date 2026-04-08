@@ -55,6 +55,7 @@ class InterviewEngine:
             p_output = await node_p1_introduction(
                 self.llm,
                 self.state["job_role"],
+                self.state["company_name"],
                 self.state["job_description"],
                 self.state["candidate_name"],
                 ""
@@ -94,6 +95,7 @@ class InterviewEngine:
                 node_p1_introduction(
                     self.llm,
                     self.state["job_role"],
+                    self.state["company_name"],
                     self.state["job_description"],
                     self.state["candidate_name"],
                     self.state["phase_transcript"]
@@ -105,8 +107,10 @@ class InterviewEngine:
                 node_p2_resume_based(
                     self.llm,
                     self.state["job_role"],
+                    self.state["company_name"],
                     self.state["job_description"],
                     self.state.get("resume_context", ""),
+                    self.state["candidate_name"],
                     self.state.get("summary_till_now", ""),
                     self.state["phase_transcript"]
                 )
@@ -117,9 +121,11 @@ class InterviewEngine:
                 node_p3_core_tech(
                     self.llm,
                     self.state["job_role"],
+                    self.state["company_name"],
                     self.state["job_description"],
                     self.state.get("resume_context", ""),
                     self.state.get("summary_till_now", ""),
+                    self.state["candidate_name"],
                     self.state.get("list_of_technical_topics", ""),
                     self.state["phase_transcript"]
                 )
@@ -130,8 +136,10 @@ class InterviewEngine:
                 node_p4_situational(
                     self.llm,
                     self.state["job_role"],
+                    self.state["company_name"],
                     self.state["job_description"],
                     self.state.get("resume_context", ""),
+                    self.state["candidate_name"],
                     self.state.get("summary_till_now", ""),
                     self.state["phase_transcript"]
                 )
@@ -142,8 +150,10 @@ class InterviewEngine:
                 node_p5_closing(
                     self.llm,
                     self.state["job_role"],
+                    self.state["company_name"],
                     self.state["job_description"],
                     self.state.get("summary_till_now", ""),
+                    self.state["candidate_name"],
                     self.state["phase_transcript"]
                 )
             )

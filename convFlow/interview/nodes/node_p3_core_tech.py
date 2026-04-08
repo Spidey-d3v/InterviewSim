@@ -2,6 +2,7 @@
 async def node_p3_core_tech(
     llm,
     job_role: str,
+    company_name: str,
     job_description: str,
     resume_context: str,
     summary_till_now: str,
@@ -15,7 +16,7 @@ async def node_p3_core_tech(
     """
 
     prompt = f"""
-You are a professional interviewer conducting a {job_role} interview for a fresher candidate named {candidate_name}.
+You are a professional interviewer conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
 Phase: CORE TECHNICAL
 Tone: Conversational, Natural and Professional
 Resume Context: {resume_context}
