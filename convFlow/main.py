@@ -266,16 +266,27 @@ async def token(user_id: str | None = Query(default=None)):
     async def start_interview():
         try:
             await asyncio.sleep(1)
-            stream_id = f"{room_name}:{time.time_ns()}"
+            state = room_states[room_name]
+            async with state["tts_lock"]:
+                state["tts_busy"] = True
+                try:
+                    stream_id = f"{room_name}:{time.time_ns()}"
 
-            async def on_question_update(text: str, is_final: bool):
-                await publish_new_question(room_name, text, stream_id=stream_id, is_final=is_final)
+                    async def on_question_update(text: str, is_final: bool):
+                        await publish_new_question(room_name, text, stream_id=stream_id, is_final=is_final)
 
-            first_question = await voice_agents[room_name].handle_turn(
-                "",
-                asyncio.get_event_loop().time(),
-                on_question_update=on_question_update,
-            )
+                    await voice_agents[room_name].handle_turn(
+                        "",
+                        asyncio.get_event_loop().time(),
+                        on_question_update=on_question_update,
+                    )
+                finally:
+                    # Clear any audio that came in while the agent was introducing itself
+                    state["buffer"].reset()
+                    state["progressive_stt"].reset()
+                    state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                    state["smart_turn_checked"] = False
+                    state["tts_busy"] = False
         except Exception as e:
             print(f"⚠️ Failed to publish initial question for {room_name}: {e}")
     asyncio.create_task(start_interview())
