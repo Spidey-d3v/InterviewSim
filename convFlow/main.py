@@ -149,6 +149,23 @@ async def publish_new_question(
     )
     print("📡 Sent new_question to frontend")
 
+
+async def publish_interview_end(room_name: str):
+    agent_room_ref = rooms.get(room_name)
+    if not agent_room_ref:
+        return
+
+    payload = {
+        "event": "interview_end",
+        "ts": time.time(),
+    }
+
+    await agent_room_ref.local_participant.publish_data(
+        json.dumps(payload).encode(),
+        reliable=True,
+    )
+    print("📡 Sent interview_end to frontend")
+
 # -------------------- SmartTurn --------------------
 smart_turn = SmartTurnV3(threshold=0.5)
 
@@ -258,6 +275,7 @@ async def token(user_id: str | None = Query(default=None)):
         "tts_busy": False,
         "tts_lock": asyncio.Lock(),
         "smart_turn_checked": False,
+        "interview_end_sent": False,
     }
 
     audio_source = rtc.AudioSource(sample_rate=48000, num_channels=1)
@@ -492,6 +510,10 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                             stt_done_time,
                             on_question_update=on_question_update,
                         )
+
+                        if voice_agent.interview_engine.interview_end and not state.get("interview_end_sent", False):
+                            state["interview_end_sent"] = True
+                            await publish_interview_end(room_name)
                     except Exception as e:
                         print(f"⚠️ Failed to handle/publish AI question for {room_name}: {e}")
                     finally:

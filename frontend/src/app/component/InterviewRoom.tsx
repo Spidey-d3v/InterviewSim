@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { jsPDF } from 'jspdf';
 import { createClient } from '@/utils/supabase';
 import { useVisionSession, type ChunkResult, type GazeLogEntry } from '../hooks/useVisionSession';
 import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
@@ -69,6 +70,7 @@ export default function InterviewRoom() {
     questionText: 'Introduce yourself.',
   });
   const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string }>>({});
+  const endingInterviewRef = useRef(false);
 
   const handleNewQuestion = useCallback(
     (
@@ -169,8 +171,6 @@ export default function InterviewRoom() {
     }
   }, [flushChunk, interviewStarted]);
 
-  useConvFlowRoom({ onTurnEnd: handleTurnEnd, onNewQuestion: handleNewQuestion, stream: cameraStream });
-
   // Request camera + microphone on mount and feed stream into video element
   useEffect(() => {
     requestPermissions().then((s) => {
@@ -247,6 +247,7 @@ export default function InterviewRoom() {
   };
 
   const handleCalibrationComplete = () => {
+    endingInterviewRef.current = false;
     setShowCalibration(false);
     setInterviewStarted(true);
     setAiQuestions([]);
@@ -317,6 +318,35 @@ export default function InterviewRoom() {
     };
   };
 
+  const getChunkGazeCounts = (chunk: ChunkResult): { focused: number; total: number } => {
+    const summary = chunk.gaze_summary;
+    if (summary && summary.total_frames > 0) {
+      return {
+        focused: summary.looking_forward + summary.looking_left + summary.looking_right,
+        total: summary.total_frames,
+      };
+    }
+
+    const total = chunk.gaze_data.length;
+    const focused = chunk.gaze_data.filter((e) => !e.status.includes('Away')).length;
+    return { focused, total };
+  };
+
+  const buildChunkGazeDistribution = (chunk: ChunkResult): GazeDistribution => {
+    const summary = chunk.gaze_summary;
+    if (summary && summary.total_frames > 0) {
+      return {
+        forward: summary.looking_forward / summary.total_frames,
+        left: summary.looking_left / summary.total_frames,
+        right: summary.looking_right / summary.total_frames,
+        down: 0,
+        away: summary.looking_away / summary.total_frames,
+      };
+    }
+
+    return buildGazeDistribution(chunk.gaze_data);
+  };
+
   const buildQuestionMetrics = useCallback((): PersistedQuestionMetric[] => {
     const grouped = new Map<number, PersistedQuestionMetric>();
     const sortedChunks = [...chunkResults].sort((a, b) => a.chunkIndex - b.chunkIndex);
@@ -351,7 +381,7 @@ export default function InterviewRoom() {
             : null,
         facial_expression_score: chunk.facial_analysis?.score ?? null,
         voice_score: chunk.voice_analysis?.score ?? null,
-        gaze_distribution: buildGazeDistribution(chunk.gaze_data),
+        gaze_distribution: buildChunkGazeDistribution(chunk),
       });
     });
 
@@ -423,7 +453,170 @@ export default function InterviewRoom() {
     sessionPersisted,
   ]);
 
+  const exportInterviewReport = useCallback(async () => {
+    const questionMetrics = buildQuestionMetrics();
+    const allGaze = chunkResults.flatMap((c) => c.gaze_data);
+    const totalGaze = allGaze.length;
+    const focusedGaze = allGaze.filter((e) => !e.status.includes('Away')).length;
+    const focusPct = totalGaze > 0 ? (focusedGaze / totalGaze) * 100 : 0;
+
+    const voiceVals = chunkResults
+      .map((c) => c.voice_analysis?.score)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    const facialVals = chunkResults
+      .map((c) => c.facial_analysis?.score)
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    const confVals = chunkResults
+      .flatMap((c) => c.predictions.map((p) => p.confidence))
+      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+
+    const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((s, v) => s + v, 0) / voiceVals.length) * 100 : null;
+    const avgFacial = facialVals.length > 0 ? (facialVals.reduce((s, v) => s + v, 0) / facialVals.length) * 100 : null;
+    const avgConfidence = confVals.length > 0 ? (confVals.reduce((s, v) => s + v, 0) / confVals.length) * 100 : null;
+
+    const overallRaw = [focusPct, avgConfidence, avgVoice, avgFacial].filter(
+      (v): v is number => typeof v === 'number' && Number.isFinite(v)
+    );
+    const overall = overallRaw.length > 0 ? overallRaw.reduce((s, v) => s + v, 0) / overallRaw.length : 0;
+
+    const started = interviewStartedAt ? new Date(interviewStartedAt) : null;
+    const ended = new Date();
+    const durationSeconds = started ? Math.max(0, Math.round((ended.getTime() - started.getTime()) / 1000)) : recordingTime;
+
+    const scoreCell = (v: number | null): string => (v == null || !Number.isFinite(v) ? 'N/A' : `${(v * 100).toFixed(1)}%`);
+
+    const questionRows = questionMetrics
+      .map(
+        (q, idx) => `
+          <tr>
+            <td>${idx + 1}</td>
+            <td>${q.question_text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
+            <td>${scoreCell(q.question_averages.confidence_score)}</td>
+            <td>${scoreCell(q.question_averages.voice_score)}</td>
+            <td>${scoreCell(q.question_averages.facial_expression_score)}</td>
+            <td>${q.chunks.length}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    const reportHtml = `
+  <style>
+    #pdf-report-root { font-family: Arial, sans-serif; color: #111; width: 1024px; background: #fff; padding: 24px; box-sizing: border-box; }
+    #pdf-report-root h1 { margin: 0 0 4px 0; }
+    #pdf-report-root .meta { color: #555; margin-bottom: 20px; line-height: 1.45; }
+    #pdf-report-root .grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    #pdf-report-root .grid3 { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+    #pdf-report-root .card { border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
+    #pdf-report-root .label { font-size: 12px; color: #666; }
+    #pdf-report-root .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    #pdf-report-root table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    #pdf-report-root th, #pdf-report-root td { border: 1px solid #ddd; padding: 8px; font-size: 13px; text-align: left; vertical-align: top; }
+    #pdf-report-root th { background: #f6f6f6; }
+    #pdf-report-root .small { color: #666; font-size: 12px; margin-top: 12px; }
+  </style>
+  <div id="pdf-report-root">
+    <h1>InterviewAR Report</h1>
+    <div class="meta">
+      Session: ${interviewSessionId ?? 'N/A'}<br/>
+      User: ${currentUserId ?? 'N/A'}<br/>
+      Started: ${started ? started.toISOString() : 'N/A'}<br/>
+      Completed: ${ended.toISOString()}<br/>
+      Duration: ${durationSeconds}s
+    </div>
+
+    <div class="grid">
+      <div class="card"><div class="label">Focus Score</div><div class="value">${focusPct.toFixed(1)}%</div></div>
+      <div class="card"><div class="label">Avg Confidence</div><div class="value">${avgConfidence == null ? 'N/A' : `${avgConfidence.toFixed(1)}%`}</div></div>
+      <div class="card"><div class="label">Voice Skills</div><div class="value">${avgVoice == null ? 'N/A' : `${avgVoice.toFixed(1)}%`}</div></div>
+      <div class="card"><div class="label">Facial Expression</div><div class="value">${avgFacial == null ? 'N/A' : `${avgFacial.toFixed(1)}%`}</div></div>
+    </div>
+
+    <div class="grid grid3">
+      <div class="card"><div class="label">Overall Score</div><div class="value">${overall.toFixed(1)}%</div></div>
+      <div class="card"><div class="label">Total Chunks</div><div class="value">${chunkResults.length}</div></div>
+      <div class="card"><div class="label">Total Questions</div><div class="value">${questionMetrics.length}</div></div>
+    </div>
+
+    <h2>Question-wise Breakdown</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Question</th>
+          <th>Confidence</th>
+          <th>Voice</th>
+          <th>Facial</th>
+          <th>Chunks</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${questionRows || '<tr><td colspan="6">No question metrics available.</td></tr>'}
+      </tbody>
+    </table>
+
+    <div class="small">Generated from actual session data only (no synthetic placeholders).</div>
+  </div>`;
+
+    const mount = document.createElement('div');
+    mount.style.position = 'fixed';
+    mount.style.left = '0';
+    mount.style.top = '0';
+    mount.style.opacity = '0';
+    mount.style.pointerEvents = 'none';
+    mount.style.zIndex = '-1';
+    mount.innerHTML = reportHtml;
+    document.body.appendChild(mount);
+
+    try {
+      const page = mount.querySelector('#pdf-report-root') as HTMLElement | null;
+      if (!page) throw new Error('Report render node missing');
+
+      // Let the browser apply layout/styles before html2canvas capture.
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'pt',
+        format: 'a4',
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const horizontalMargin = 24;
+
+      await pdf.html(page, {
+        x: horizontalMargin,
+        y: 24,
+        width: pageWidth - horizontalMargin * 2,
+        windowWidth: 1024,
+        autoPaging: 'text',
+        html2canvas: {
+          scale: 1,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+        },
+      });
+
+      pdf.save(`interview-report-${interviewSessionId ?? Date.now()}.pdf`);
+    } finally {
+      document.body.removeChild(mount);
+    }
+  }, [
+    buildQuestionMetrics,
+    chunkResults,
+    currentUserId,
+    interviewSessionId,
+    interviewStartedAt,
+    recordingTime,
+  ]);
+
   const handleLeave = async () => {
+    if (endingInterviewRef.current) return;
+    endingInterviewRef.current = true;
+
     // Exit fullscreen first
     await exitFullscreen();
 
@@ -443,6 +636,18 @@ export default function InterviewRoom() {
       }, 500);
     }
   };
+
+  const handleInterviewEnd = useCallback(() => {
+    console.log('🏁 Received interview_end from backend; ending interview.');
+    void handleLeave();
+  }, [handleLeave]);
+
+  useConvFlowRoom({
+    onTurnEnd: handleTurnEnd,
+    onInterviewEnd: handleInterviewEnd,
+    onNewQuestion: handleNewQuestion,
+    stream: cameraStream,
+  });
 
   return (
     <div ref={containerRef} className="min-h-screen bg-[#0a0a0f] text-white flex flex-col">
@@ -709,10 +914,18 @@ export default function InterviewRoom() {
                   <span className="text-sm font-bold text-purple-400">
                     {chunkResults.length > 0
                       ? (() => {
-                          const total = chunkResults.reduce((s, c) => s + c.gaze_data.length, 0);
-                          const focused = chunkResults.reduce(
-                            (s, c) => s + c.gaze_data.filter((e) => !e.status.includes('Away')).length, 0
+                          const totals = chunkResults.reduce(
+                            (acc, c) => {
+                              const counts = getChunkGazeCounts(c);
+                              return {
+                                focused: acc.focused + counts.focused,
+                                total: acc.total + counts.total,
+                              };
+                            },
+                            { focused: 0, total: 0 }
                           );
+                          const focused = totals.focused;
+                          const total = totals.total;
                           return total > 0 ? `${((focused / total) * 100).toFixed(0)}%` : 'Tracking…';
                         })()
                       : 'Tracking…'}
@@ -724,10 +937,18 @@ export default function InterviewRoom() {
                     style={{
                       width: chunkResults.length > 0
                         ? (() => {
-                            const total = chunkResults.reduce((s, c) => s + c.gaze_data.length, 0);
-                            const focused = chunkResults.reduce(
-                              (s, c) => s + c.gaze_data.filter((e) => !e.status.includes('Away')).length, 0
+                            const totals = chunkResults.reduce(
+                              (acc, c) => {
+                                const counts = getChunkGazeCounts(c);
+                                return {
+                                  focused: acc.focused + counts.focused,
+                                  total: acc.total + counts.total,
+                                };
+                              },
+                              { focused: 0, total: 0 }
                             );
+                            const focused = totals.focused;
+                            const total = totals.total;
                             return total > 0 ? `${((focused / total) * 100).toFixed(0)}%` : '0%';
                           })()
                         : '0%',
@@ -911,9 +1132,18 @@ export default function InterviewRoom() {
             <div className="p-6">
               {/* Aggregated Stats */}
               {(() => {
-                const allGaze = chunkResults.flatMap((c) => c.gaze_data);
-                const total = allGaze.length;
-                const focused = allGaze.filter((e) => !e.status.includes('Away')).length;
+                const totals = chunkResults.reduce(
+                  (acc, c) => {
+                    const counts = getChunkGazeCounts(c);
+                    return {
+                      focused: acc.focused + counts.focused,
+                      total: acc.total + counts.total,
+                    };
+                  },
+                  { focused: 0, total: 0 }
+                );
+                const total = totals.total;
+                const focused = totals.focused;
                 const focusPct = total > 0 ? ((focused / total) * 100).toFixed(1) : '0';
                 const avgVoice =
                   chunkResults.filter((c) => c.voice_analysis?.score != null).length > 0
@@ -991,9 +1221,14 @@ export default function InterviewRoom() {
                               Facial: {(chunk.facial_analysis.score * 100).toFixed(0)}%
                             </span>
                           )}
-                          <span className="text-gray-400">
-                            Gaze: {chunk.gaze_data.filter((e) => !e.status.includes('Away')).length}/{chunk.gaze_data.length}
-                          </span>
+                          {(() => {
+                            const counts = getChunkGazeCounts(chunk);
+                            return (
+                              <span className="text-gray-400">
+                                Gaze: {counts.focused}/{counts.total}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -1030,35 +1265,15 @@ export default function InterviewRoom() {
               </button>
               <button
                 disabled={pendingChunks > 0 || pendingUploads > 0}
-                onClick={() => {
-                  // Aggregate inference_summary across all chunks
-                  const allConf = chunkResults.flatMap((c) => c.predictions.map((p) => p.confidence));
-                  const overall_inference_summary = allConf.length > 0
-                    ? {
-                        count: allConf.length,
-                        mean_confidence: parseFloat((allConf.reduce((s, v) => s + v, 0) / allConf.length).toFixed(4)),
-                        min_confidence:  parseFloat(Math.min(...allConf).toFixed(4)),
-                        max_confidence:  parseFloat(Math.max(...allConf).toFixed(4)),
-                      }
-                    : null;
-                  const blob = new Blob(
-                    [JSON.stringify({ chunkResults, overall_inference_summary, sessionData }, null, 2)],
-                    { type: 'application/json' }
-                  );
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `interview-results-${Date.now()}.json`;
-                  a.click();
-                }}
+                onClick={exportInterviewReport}
                 className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-all font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:from-purple-500/50 disabled:to-pink-500/50"
-                title={pendingChunks > 0 || pendingUploads > 0 ? `Waiting for ${pendingUploads} upload${pendingUploads !== 1 ? 's' : ''} + ${pendingChunks} chunk${pendingChunks !== 1 ? 's' : ''} to finish…` : 'Download all results'}
+                title={pendingChunks > 0 || pendingUploads > 0 ? `Waiting for ${pendingUploads} upload${pendingUploads !== 1 ? 's' : ''} + ${pendingChunks} chunk${pendingChunks !== 1 ? 's' : ''} to finish…` : 'Download interview report'}
               >
                 {pendingUploads > 0
                   ? `Uploading ${pendingUploads} chunk${pendingUploads !== 1 ? 's' : ''}…`
                   : pendingChunks > 0
                   ? `Waiting for ${pendingChunks} chunk${pendingChunks !== 1 ? 's' : ''}…`
-                  : 'Download Data'}
+                  : 'Download Report'}
               </button>
             </div>
           </div>

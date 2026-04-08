@@ -11,6 +11,7 @@ const LIVEKIT_URL = "ws://localhost:7880";
 
 interface UseConvFlowRoomOptions {
   onTurnEnd: () => void;
+  onInterviewEnd: () => void;
   onNewQuestion: (
     questionText: string,
     meta?: { phase?: string; turnIndex?: number; ts?: number; streamId?: string; isFinal?: boolean }
@@ -18,8 +19,9 @@ interface UseConvFlowRoomOptions {
   stream: MediaStream | null;
 }
 
-export function useConvFlowRoom({ onTurnEnd, onNewQuestion, stream }: UseConvFlowRoomOptions) {
+export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stream }: UseConvFlowRoomOptions) {
   const onTurnEndRef = useRef(onTurnEnd);
+  const onInterviewEndRef = useRef(onInterviewEnd);
   const onNewQuestionRef = useRef(onNewQuestion);
   const lastQuestionEventRef = useRef<string | null>(null);
 
@@ -30,6 +32,10 @@ export function useConvFlowRoom({ onTurnEnd, onNewQuestion, stream }: UseConvFlo
   useEffect(() => {
     onNewQuestionRef.current = onNewQuestion;
   }, [onNewQuestion]);
+
+  useEffect(() => {
+    onInterviewEndRef.current = onInterviewEnd;
+  }, [onInterviewEnd]);
 
   useEffect(() => {
     // We only connect if the parent has provided a stream
@@ -50,6 +56,11 @@ export function useConvFlowRoom({ onTurnEnd, onNewQuestion, stream }: UseConvFlo
         const msg = JSON.parse(new TextDecoder().decode(payload));
         if (msg.event === "turn_end") {
           onTurnEndRef.current();
+          return;
+        }
+
+        if (msg.event === "interview_end") {
+          onInterviewEndRef.current();
           return;
         }
 

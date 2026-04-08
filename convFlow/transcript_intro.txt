@@ -1,0 +1,25 @@
+
+Interviewer: Hi Gaurav, thanks for joining us today! We're excited to talk to you about our entry-level Full Stack Developer position, where you'll get to build and maintain web applications from the ground up. To start, could you tell us a bit about yourself, your background, and what makes you a great fit for this role?
+Candidate: nan Obviously you have read my resume, so you can ask me about any of the projects. You have seen all the projects in my resume. You can list them and I will answer all the doubts you have about me 1 by 1, question wise.
+
+Interviewer: That's a great approach, Gaurav! I appreciate you being so direct. We definitely want to dive into your projects. Before we do, though, could you give us a brief overview of your journey into full-stack development? What sparked your interest, and what key experiences have shaped your skills for this kind of role?
+Candidate: If that sounds ok to you.
+
+Interviewer: "Absolutely, Gaurav! That sounds perfectly fine. I'm eager to hear about your journey into full-stack development. What initially drew you to it, and what experiences have been most instrumental in building your skills for this type of role?"
+Candidate: Ok. Hi. Hello. Yes, hi bhai. All good. Ok.
+
+Interviewer: That's great to hear, Gaurav! So, what initially sparked your interest in full-stack development? Was there a particular project or experience that made you realize this was the path for you?
+Candidate: Nahin, yah jab bol raha tha tabhi mainne bola tha yah random chizen. Haan, audio. Haan, audio ismen aaj par ja rahi hai, start hota ja rahi hai. Haan, bas yah vaala change karke puchh kar dena. Yah ruk kaise ki aap sun kaise nahin pa raha hai mere ko hi.
+
+Interviewer: Thanks for sharing that, Gaurav. It sounds like you have a lot of enthusiasm for the technical aspects of audio processing.
+
+To shift gears a bit and talk more about your overall journey, what initially sparked your interest in full-stack development? Was there a particular project or experience that made you realize this was the path for you?
+Candidate: Thik hai, mainne sab main kar deta hoon ek baar kuchh.
+
+Interviewer: That's an interesting way to put it, Gaurav! It sounds like you're eager to dive in.
+
+Let's go back to what we were discussing. You mentioned your enthusiasm for the technical aspects of audio processing. To shift gears a bit and talk more about your overall journey, what initially sparked your interest in full-stack development? Was there a particular project or experience that made you realize this was the path for you?
+Candidate: nan Can we end this interview? Can we end this interview?
+
+Interviewer: Gaurav, I understand. It seems like you're not interested in continuing with this interview today. I appreciate you taking the time to speak with me, and I wish you the best in your job search.
+Candidate: Bhai kuchh print kara den yahaan par hai na? Haan na, to at least mere ko samajh raha hai kyonki end ho chuka hai. Ab I think end ho jaana chaahie. Usne bola all the best in your job search. Hi.

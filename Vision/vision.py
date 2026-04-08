@@ -985,7 +985,6 @@ def analyze_video(video_path: str, session_id: str = "default", speed: float = 1
                 _ts = datetime.datetime.now().isoformat()
                 _log_entries.append({"timestamp": _ts, "status": _gaze_status})
                 _log_file.write(f"{_ts}: {_gaze_status}\n")
-                _log_file.flush()
 
     except Exception as _exc:
         print(f"[analyze_video:{session_id}] ERROR: {_exc}", flush=True)

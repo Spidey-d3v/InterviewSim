@@ -402,7 +402,10 @@ class GazeAnalyzer:
         _ffmpeg = os.environ.get("FFMPEG_PATH", "ffmpeg")
         cmd = [
             _ffmpeg, "-y", "-i", input_path,
+            "-vf", "fps=30",
+            "-r", "30",
             "-vcodec", "libx264", "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
             "-acodec", "aac", "-strict", "experimental",
             out_path
         ]
@@ -532,6 +535,14 @@ app.add_middleware(
 # Store active sessions
 # ---------------------------------------------------------------------------
 active_sessions = {}
+
+# Cache completed chunk payloads so transient WebSocket disconnects do not
+# drop already-computed results.
+CHUNK_RESULT_CACHE = {}
+
+# Default to summary-first payloads to reduce websocket size; enable raw gaze
+# only when explicitly needed for debugging.
+SEND_RAW_GAZE_DATA = os.getenv("VISION_SEND_RAW_GAZE_DATA", "0") == "1"
 
 # Sequential processing (1 at a time) ensures each chunk finishes as fast as possible
 # without resource contention, providing a better "real-time" experience.
@@ -751,6 +762,7 @@ async def _process_chunk(
     chunk_id: str,
     chunk_index: int,
     video_path: str,
+    chunk_result_cache: dict,
 ) -> None:
     """Process a single 15-s video chunk through all four analysis modules:
 
@@ -829,20 +841,24 @@ async def _process_chunk(
                 f"voice={voice_result.get('score')}"
             )
 
+            chunk_payload = {
+                'type': 'chunk_processed',
+                'chunk_id': chunk_id,
+                'chunk_index': chunk_index,
+                'gaze_data': gaze_data if SEND_RAW_GAZE_DATA else [],
+                'gaze_summary': gaze_summary,
+                'predictions': predictions,
+                'inference_summary': inference_summary,
+                'voice_analysis': voice_result,
+                'facial_analysis': facial_result,
+            }
+            chunk_result_cache[chunk_id] = chunk_payload
+
             try:
-                await websocket.send_json({
-                    'type': 'chunk_processed',
-                    'chunk_id': chunk_id,
-                    'chunk_index': chunk_index,
-                    'gaze_data': gaze_data,
-                    'gaze_summary': gaze_summary,
-                    'predictions': predictions,
-                    'inference_summary': inference_summary,
-                    'voice_analysis': voice_result,
-                    'facial_analysis': facial_result,
-                })
+                await websocket.send_json(chunk_payload)
+                chunk_result_cache.pop(chunk_id, None)
             except Exception:
-                print(f"[Chunk {chunk_index}] Client disconnected — results discarded")
+                print(f"[Chunk {chunk_index}] Client disconnected — result cached for replay")
 
         except Exception as e:
             print(f"[Chunk {chunk_index}] ERROR: {e}")
@@ -1031,10 +1047,38 @@ async def websocket_endpoint(websocket: WebSocket):
                     print(f"Processing chunk {chunk_index} ({chunk_id}): {video_path}")
                     # Fire and forget — each chunk runs independently
                     task = asyncio.create_task(
-                        _process_chunk(websocket, chunk_id, chunk_index, video_path)
+                        _process_chunk(
+                            websocket,
+                            chunk_id,
+                            chunk_index,
+                            video_path,
+                            CHUNK_RESULT_CACHE,
+                        )
                     )
                     pending_chunk_tasks.add(task)
                     task.add_done_callback(pending_chunk_tasks.discard)
+
+            elif action == 'replay_chunk_results':
+                # Replay any completed chunk results that were computed while the
+                # client was disconnected.
+                replay_items = sorted(
+                    CHUNK_RESULT_CACHE.items(),
+                    key=lambda item: int(item[1].get('chunk_index', 0)),
+                )
+                sent_count = 0
+                for chunk_id, payload in replay_items:
+                    try:
+                        await websocket.send_json(payload)
+                        CHUNK_RESULT_CACHE.pop(chunk_id, None)
+                        sent_count += 1
+                    except Exception:
+                        break
+
+                await websocket.send_json({
+                    'type': 'replay_complete',
+                    'sent_count': sent_count,
+                    'pending_count': len(CHUNK_RESULT_CACHE),
+                })
 
             elif action == 'get_status':
                 if current_session and current_session.is_running:
