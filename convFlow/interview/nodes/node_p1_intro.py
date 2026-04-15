@@ -1,5 +1,6 @@
 async def node_p1_introduction(
     llm,
+    interviewer_name: str,
     job_role: str,
     company_name: str,
     job_description: str,
@@ -16,7 +17,7 @@ async def node_p1_introduction(
     transcript_context = transcript if transcript.strip() else "Interview has not started yet."
 
     prompt = f"""
-         You are a professional interviewer starting a {job_role} interview at {company_name} for a fresher candidate named {candidate_ref}.
+            You are a professional interviewer named {interviewer_name} starting a {job_role} interview at {company_name} for a fresher candidate named {candidate_ref}.
          Phase: INTRODUCTION
          Tone: Conversational, Natural, Concise and Professional
          Resume Context: {resume_context}

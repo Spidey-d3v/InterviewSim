@@ -18,6 +18,7 @@ class InterviewState(TypedDict):
     summary_till_now: str
 
     # Static inputs
+    interviewer_name: str
     job_role: str
     job_description: str
     resume_context: str

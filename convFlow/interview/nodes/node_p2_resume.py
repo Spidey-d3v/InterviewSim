@@ -1,6 +1,7 @@
 
 async def node_p2_resume_based(
     llm,
+    interviewer_name: str,
     job_role: str,
     company_name: str,
     job_description: str,
@@ -15,7 +16,7 @@ async def node_p2_resume_based(
     """
 
     prompt = f"""
-        You are a professional interviewer conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
+        You are a professional interviewer named {interviewer_name} conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
         Phase: RESUME BASED QUESTIONS
         Tone: Conversational, Natural and Professional
         Resume Context: {resume_context}

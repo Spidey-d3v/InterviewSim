@@ -16,10 +16,11 @@ async def node_r_generate_stream(
     last_answer = state.get("last_answer", "")
     company_name = state.get("company_name", "")
     candidate_name = state.get("candidate_name", "")
+    interviewer_name = state.get("interviewer_name", "")
     transcript = state.get("transcript", "")
 
     prompt = f"""
-    You are a professional interviewer conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
+    You are a professional interviewer named {interviewer_name} conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
     Current Phase: {phase.upper()}
     Job Description:
     {job_description}

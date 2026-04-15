@@ -20,7 +20,7 @@ from interview.utils.rolling_summarizer import update_summary
 class InterviewEngine:
 
     def __init__(self, llm, job_role: str = "", job_description: str = "", resume_context: str = "",
-    list_of_technical_topics: str = "", company_name: str = "", candidate_name: str = ""):
+    list_of_technical_topics: str = "", company_name: str = "", candidate_name: str = "", interviewer_name: str = ""):
         self.llm = llm
         self.state = create_initial_state()
         self.interview_end = False
@@ -42,6 +42,9 @@ class InterviewEngine:
 
         if candidate_name:
             self.state["candidate_name"] = candidate_name
+
+        if interviewer_name:
+            self.state["interviewer_name"] = interviewer_name
     
     async def _run_evaluator(self, phase, transcript):
         result = await node_s_evaluator(self.llm, phase, transcript)
@@ -54,6 +57,7 @@ class InterviewEngine:
         if self.state["phase"] == "intro" and not self.state.get("last_question"):
             p_output = await node_p1_introduction(
                 self.llm,
+                self.state["interviewer_name"],
                 self.state["job_role"],
                 self.state["company_name"],
                 self.state["job_description"],
@@ -89,6 +93,7 @@ class InterviewEngine:
             node_p_task = asyncio.create_task(
                 node_p1_introduction(
                     self.llm,
+                    self.state["interviewer_name"],
                     self.state["job_role"],
                     self.state["company_name"],
                     self.state["job_description"],
@@ -102,6 +107,7 @@ class InterviewEngine:
             node_p_task = asyncio.create_task(
                 node_p2_resume_based(
                     self.llm,
+                    self.state["interviewer_name"],
                     self.state["job_role"],
                     self.state["company_name"],
                     self.state["job_description"],
@@ -116,6 +122,7 @@ class InterviewEngine:
             node_p_task = asyncio.create_task(
                 node_p3_core_tech(
                     self.llm,
+                    self.state["interviewer_name"],
                     self.state["job_role"],
                     self.state["company_name"],
                     self.state["job_description"],
@@ -131,6 +138,7 @@ class InterviewEngine:
             node_p_task = asyncio.create_task(
                 node_p4_situational(
                     self.llm,
+                    self.state["interviewer_name"],
                     self.state["job_role"],
                     self.state["company_name"],
                     self.state["job_description"],
@@ -145,6 +153,7 @@ class InterviewEngine:
             node_p_task = asyncio.create_task(
                 node_p5_closing(
                     self.llm,
+                    self.state["interviewer_name"],
                     self.state["job_role"],
                     self.state["company_name"],
                     self.state["job_description"],
@@ -159,6 +168,7 @@ class InterviewEngine:
             node_p_task = asyncio.create_task(
                 node_p5_closing(
                     self.llm,
+                    self.state["interviewer_name"],
                     self.state["job_role"],
                     self.state["job_description"],
                     self.state.get("summary_till_now", ""),

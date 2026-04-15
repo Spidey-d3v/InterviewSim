@@ -1,5 +1,6 @@
 async def node_p5_closing(
     llm,
+    interviewer_name: str,
     job_role: str,
     company_name: str,
     job_description: str,
@@ -13,7 +14,7 @@ async def node_p5_closing(
     """
 
     prompt = f"""
-You are a professional interviewer closing a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
+You are a professional interviewer named {interviewer_name} closing a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
 Phase: CLOSING
 Tone: Conversational, Natural, Warm and Professional
 Job Description: {job_description}

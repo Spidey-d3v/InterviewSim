@@ -1,6 +1,7 @@
 
 async def node_p4_situational(
     llm,
+    interviewer_name: str,
     job_role: str,
     company_name: str,
     job_description: str,
@@ -15,7 +16,7 @@ async def node_p4_situational(
     """
 
     prompt = f"""
-You are a professional interviewer conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
+You are a professional interviewer named {interviewer_name} conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
 Phase: SITUATIONAL QUESTIONS
 Tone: Conversational, Natural
 Resume Context: {resume_context}
