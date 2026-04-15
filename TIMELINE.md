@@ -1,5 +1,15 @@
 # Project Timeline
 
+## 2026-04-15
+
+- **Action:** Analyzed `dep.yml` (conda `--from-history` export) for completeness; created macOS startup script.
+- **Details:**
+    - Found that `dep.yml` only contains conda-channel packages and is missing all pip dependencies required by Vision and convFlow services.
+    - Identified `pupil310.yml` (full export) as the correct environment spec.
+    - Created `start-system.sh` — macOS/Linux equivalent of `start-system.ps1`, using `osascript` to open Terminal.app tabs.
+    - Rewrote `dep.yml` as the macOS-compatible full environment: stripped Windows-only packages (`pywin32`, `win-inet-pton`, `pygetwindow`, `keyboard`, `ucrt`, `vc` runtimes), replaced CUDA torch with CPU/MPS builds, added `pyobjc` for macOS GUI, added `conda-forge` channel.
+- **Outcome:** macOS launch script and environment file ready for cross-platform deployment.
+
 ## 2026-04-04
 
 - **Action:** Consolidated project documentation into a single `README.md`.

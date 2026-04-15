@@ -183,7 +183,7 @@ class InterviewEngine:
         if q_output.get("should_terminate"):
             self.interview_end = True
 
-        # -------------------- DECISION --------------------
+        # -------------------- DECISION ------------------
         if q_output.get("intervention_type") == "phase_transition":
             old_phase = self.state["phase"]
             transcript = self.state.get("phase_transcript", "")
