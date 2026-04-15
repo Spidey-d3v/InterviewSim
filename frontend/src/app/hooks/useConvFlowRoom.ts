@@ -103,7 +103,7 @@ export function useConvFlowRoom({
 
     async function connect() {
       try {
-        const res = await fetch(`${CONVFLOW_BACKEND}/token?user_id=${encodeURIComponent(userId)}`);
+        const res = await fetch(`${CONVFLOW_BACKEND}/token?user_id=${encodeURIComponent(userId!)}`);
         const { token } = await res.json();
         await room.connect(LIVEKIT_URL, token);
         console.log("✅ Connected to Agent Room");
