@@ -35,6 +35,16 @@ async def node_q_controller(
     behaviour_result = await _detect_abrupt_behaviour(llm, candidate_answer, state)
     
     if behaviour_result["is_abrupt"]:
+        if behaviour_result.get("type", "").lower() == "explicit_phase_skip":
+            return {
+                "intervention_needed": True,
+                "intervention_type": "phase_transition",
+                "reason": behaviour_result["reason"],
+                "next_phase": _get_next_phase(current_phase),
+                "context_for_generator": behaviour_result["response_message"],
+                "should_override_phase_node": True
+            }
+
         return {
             "intervention_needed": True,
             "intervention_type": "abrupt_behaviour",
@@ -85,13 +95,14 @@ Detect these behaviours:
 5. REFUSAL: Refuses to answer ("I won't answer that", "Skip this question")
 6. CONFUSION_ABOUT_ROLE: Asks "What company is this?", "What job am I applying for?"
 7. REQUEST_TO_TERMINATE: "I want to end the interview", "I'm done"
+8. EXPLICIT_PHASE_SKIP: Candidate explicitly asks to change/move to the next phase ("Can we move to the next phase?", "Next section please")
 
 If NO abrupt behaviour, return: {{"is_abrupt": false}}
 
 If abrupt behaviour detected, return JSON:
 {{
     "is_abrupt": true,
-    "type": "abusive|reintroduction|off_topic|refusal|confusion|termination_request",
+    "type": "abusive|reintroduction|off_topic|refusal|confusion|termination_request|explicit_phase_skip",
     "reason": "brief explanation",
     "response_message": "professional response to say to candidate",
     "should_terminate": true/false
@@ -102,6 +113,7 @@ For others: should_terminate = false
 
 Response message examples:
 - Abuse: "I'll end the interview here. Thank you for your time."
+- Explicit Phase Skip: "Of course. Let's move on to the next section."
 - Reintroduction: "We're already in the {state["phase"]} phase. Please answer the current question."
 - Off-topic: "Let's return to the interview question about {state["last_question"]}."
 - Refusal: "I understand. Let me rephrase the question: {state["last_question"]}"

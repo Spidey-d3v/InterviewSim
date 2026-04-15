@@ -152,12 +152,14 @@ async def publish_new_question(
 
 async def publish_interview_end(room_name: str):
     agent_room_ref = rooms.get(room_name)
-    if not agent_room_ref:
+    engine = interview_engines.get(room_name)
+    if not agent_room_ref or not engine:
         return
 
     payload = {
         "event": "interview_end",
         "ts": time.time(),
+        "final_scores": engine.state.get("candidate_profile", {}).get("scores", {})
     }
 
     await agent_room_ref.local_participant.publish_data(
@@ -534,7 +536,7 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                 # Publish turn_end data message to LiveKit room so frontend flushes video
                 agent_room_ref = rooms[room_name]
                 await agent_room_ref.local_participant.publish_data(
-                    json.dumps({"event": "turn_end", "ts": time.time()}).encode(),
+                    json.dumps({"event": "turn_end", "ts": time.time(), "transcript": transcript}).encode(),
                     reliable=True,
                 )
                 print("📡 Sent turn_end to frontend")

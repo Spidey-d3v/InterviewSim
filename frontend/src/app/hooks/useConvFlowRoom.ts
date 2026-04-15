@@ -10,8 +10,8 @@ const CONVFLOW_BACKEND = "http://localhost:8001";
 const LIVEKIT_URL = "ws://localhost:7880";
 
 interface UseConvFlowRoomOptions {
-  onTurnEnd: () => void;
-  onInterviewEnd: () => void;
+  onTurnEnd: (transcript?: string) => void;
+  onInterviewEnd: (finalScores?: any) => void;
   onNewQuestion: (
     questionText: string,
     meta?: { phase?: string; turnIndex?: number; ts?: number; streamId?: string; isFinal?: boolean }
@@ -66,16 +66,11 @@ export function useConvFlowRoom({
       try {
         const msg = JSON.parse(new TextDecoder().decode(payload));
         if (msg.event === "turn_end") {
-          onTurnEndRef.current();
-          return;
-        }
-
-        if (msg.event === "interview_end") {
-          onInterviewEndRef.current();
-          return;
-        }
-
-        if (msg.event === "new_question" && typeof msg.question_text === "string") {
+          onTurnEndRef.current(msg.transcript);
+        } else if (msg.event === "interview_end") {
+          console.log("🏁 Interview ending properly via agent signal");
+          onInterviewEndRef.current(msg.final_scores);
+        } else if (msg.event === "new_question" && typeof msg.question_text === "string") {
           const trimmed = msg.question_text.trim();
           if (!trimmed) return;
 

@@ -32,8 +32,9 @@ type PersistedChunkMetric = {
 type PersistedQuestionMetric = {
   question_index: number;
   question_text: string;
+  candidate_answer?: string;
   phase?: string;
-  chunks: PersistedChunkMetric[];
+  chunks: any[];
   question_averages: {
     confidence_score: number | null;
     facial_expression_score: number | null;
@@ -75,6 +76,8 @@ export default function InterviewRoom() {
     phase: 'intro',
   });
   const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string; phase: string }>>({});
+  const candidateAnswerMapRef = useRef<Record<number, string>>({});
+  const [finalScores, setFinalScores] = useState<Record<string, any> | null>(null);
   const endingInterviewRef = useRef(false);
 
   const handleNewQuestion = useCallback(
@@ -173,8 +176,11 @@ export default function InterviewRoom() {
     onError: (msg) => console.error('[Recorder]', msg),
   });
 
-  const handleTurnEnd = useCallback(() => {
+  const handleTurnEnd = useCallback((transcript?: string) => {
     flushChunk();
+    if (transcript) {
+      candidateAnswerMapRef.current[questionContextRef.current.questionIndex] = transcript;
+    }
     if (interviewStarted) {
       setStreamingQuestion(null);
       setActiveQuestionStreamId(null);
@@ -373,6 +379,7 @@ export default function InterviewRoom() {
         grouped.set(mappedQuestion.question_index, {
           question_index: mappedQuestion.question_index,
           question_text: mappedQuestion.question_text,
+          candidate_answer: candidateAnswerMapRef.current[mappedQuestion.question_index],
           phase: mappedQuestion.phase,
           chunks: [],
           question_averages: {
@@ -563,11 +570,33 @@ export default function InterviewRoom() {
       for (const [phase, phaseQs] of phaseGroups.entries()) {
         ensureSpace(lineHeight * 3);
         const phaseName = phase.toUpperCase().replace('_', ' ');
-        addWrappedText(`--- PHASE: ${phaseName} ---`, { bold: true, size: 12, bottomGap: 4 });
+        // Render LLM phase scores if available
+        const pScores = finalScores && finalScores[phase] ? finalScores[phase] : null;
         
+        addWrappedText(`--- PHASE: ${phaseName} ---`, { bold: true, size: 12, bottomGap: 4 });
+        if (pScores) {
+           if (pScores.metrics) {
+             const metricsText = Object.entries(pScores.metrics)
+               .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1).replace('_', ' ')}: ${v || 0}`)
+               .join(' | ');
+             addWrappedText(metricsText, { size: 10, bottomGap: 4 });
+           }
+           
+           if (pScores.advice && pScores.advice.length > 0) {
+             addWrappedText(`AI Advice:`, { bold: true, size: 10 });
+             pScores.advice.forEach((adv: string) => {
+                addWrappedText(`• ${adv}`, { size: 9 });
+             });
+             addWrappedText(` `, { bottomGap: 4 });
+           }
+        }
+
         phaseQs.forEach((q, idx) => {
           ensureSpace(lineHeight * 6);
           addWrappedText(`Q. ${q.question_text}`, { bold: true });
+          if (q.candidate_answer) {
+             addWrappedText(`Candidate: "${q.candidate_answer.length > 300 ? q.candidate_answer.substring(0, 300) + '...' : q.candidate_answer}"`, { size: 10, bottomGap: 2 });
+          }
           addWrappedText(`Confidence: ${scoreCell(q.question_averages.confidence_score)}`);
           addWrappedText(`Voice: ${scoreCell(q.question_averages.voice_score)}`);
           addWrappedText(`Facial: ${scoreCell(q.question_averages.facial_expression_score)}`);
@@ -588,6 +617,7 @@ export default function InterviewRoom() {
     interviewSessionId,
     interviewStartedAt,
     recordingTime,
+    finalScores,
   ]);
 
   const handleLeave = async () => {
@@ -614,8 +644,11 @@ export default function InterviewRoom() {
     }
   };
 
-  const handleInterviewEnd = useCallback(() => {
+  const handleInterviewEnd = useCallback((fScores?: any) => {
     console.log('🏁 Received interview_end from backend; ending interview.');
+    if (fScores) {
+      setFinalScores(fScores);
+    }
     void handleLeave();
   }, [handleLeave]);
 

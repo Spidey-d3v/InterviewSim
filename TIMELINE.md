@@ -2,14 +2,16 @@
 
 ## 2026-04-16
 
-- **Action:** Implemented Interview Phase UI Tracking & Job Role Presets.
+- **Action:** Implemented Dynamic Interview Routing, PDF Transcript Mapping, and Engine Signal Correction.
 - **Details:**
     - Resolved `TS2345` compiler error in `VisionSessionControl.tsx` by updating the boolean `headless` parameter call to an empty string.
     - Updated `frontend/src/app/front/homepage/page.tsx` to display a role selection modal, dynamically passing the user's selected Job Role as a `?role=` URL parameter.
-    - Created a dictionary of preset Job Roles in `convFlow/main.py`, automatically populating `job_description`, `list_of_technical_topics`, and `interviewer_name` based on frontend selection context.
-    - Intercepted LiveKit stream messaging inside `useConvFlowRoom.ts` and `InterviewRoom.tsx` to extract phase transitions natively emitted by the `InterviewEngine`.
-    - Grouped the final PDF report output into dedicated, phase-wise summary boundaries.
-- **Outcome:** Substantially improved UI feedback and post-interview result clustering while establishing a unified multi-role framework.
+    - Intercepted LiveKit stream messaging inside `useConvFlowRoom.ts` and `InterviewRoom.tsx` to harvest STT outputs mapped beneath `turn_end` events structure, capturing Candidate Transcripts effectively without redundant API calls. 
+    - Wired `publish_interview_end` routing inside `convFlow/main.py` explicitly carrying `node_s_evaluator`'s 3-pillar LLM technical scores & feedback.
+    - Refactored frontend PDF rendering block to append captured `candidate_answer` blocks and AI evaluation metrics sequentially beneath each specific question boundary, visually grouped under Phase blocks.
+    - Investigated and repaired the controller-routing block bug within `convFlow/interview/engine.py` allowing correctly parsed `q_output.get("context_for_generator")` overrides when processing arbitrary abrupt interventions (like Ending the interview).
+    - Hardcoded explicit instructions into `node_q_controller.py` forcing it to parse "move to next phase" requests into a safe explicit bypass signal rather than confusing the agent timeout logic. 
+- **Outcome:** The codebase now dynamically translates real-time Phase requests safely while maintaining an interconnected 3-Pillar grading summary inside the UI exported PDF layout securely mapping the Candidate responses. 
 
 ## 2026-04-15
 

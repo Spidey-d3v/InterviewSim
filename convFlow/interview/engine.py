@@ -194,38 +194,38 @@ class InterviewEngine:
             self.interview_end = True
 
         # -------------------- DECISION ------------------
-        if q_output.get("intervention_type") == "phase_transition":
-            old_phase = self.state["phase"]
-            transcript = self.state.get("phase_transcript", "")
+        if q_output.get("intervention_needed"):
+            if q_output.get("intervention_type") == "phase_transition":
+                old_phase = self.state["phase"]
+                transcript = self.state.get("phase_transcript", "")
 
-            # -------------------- SAVE TRANSCRIPT --------------------
-            save_phase_transcript(old_phase, transcript)
+                # -------------------- SAVE TRANSCRIPT --------------------
+                save_phase_transcript(old_phase, transcript)
 
-            # Check if moving past the final phase
-            if old_phase == "closing":
-                self.interview_end = True
+                # Check if moving past the final phase
+                if old_phase == "closing":
+                    self.interview_end = True
 
-            # -------------------- ASYNC EVALUATION --------------------
-            asyncio.create_task(
-                self._run_evaluator(old_phase, transcript)
-            )
+                # -------------------- ASYNC EVALUATION --------------------
+                asyncio.create_task(
+                    self._run_evaluator(old_phase, transcript)
+                )
 
-            # -------------------- UPDATE SUMMARY --------------------
-            self.state["summary_till_now"] = await update_summary(
-                self.llm,
-                self.state.get("summary_till_now", ""),
-                transcript
-            )
+                # -------------------- UPDATE SUMMARY --------------------
+                self.state["summary_till_now"] = await update_summary(
+                    self.llm,
+                    self.state.get("summary_till_now", ""),
+                    transcript
+                )
 
-            # -------------------- SET CONTEXT FOR R --------------------
-            selected_context = q_output.get("context_for_generator", "")
+                # -------------------- PHASE SWITCH --------------------
+                self.state["phase"] = q_output.get("next_phase", self.state["phase"]) # phase change
+                self.state["phase_question_count"] = 0
+                self.state["phase_word_count"] = 0
+                self.state["phase_transcript"] = ""
 
-            # -------------------- PHASE SWITCH --------------------
-            self.state["phase"] = q_output.get("next_phase", self.state["phase"]) # phase change
-            self.state["phase_question_count"] = 0
-            self.state["phase_word_count"] = 0
-            self.state["phase_transcript"] = ""
-
+            # Use controller context over standard phase node context
+            selected_context = q_output.get("context_for_generator", p_output)
         else:
             selected_context = p_output
 
