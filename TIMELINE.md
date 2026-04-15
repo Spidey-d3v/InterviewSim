@@ -1,5 +1,16 @@
 # Project Timeline
 
+## 2026-04-16
+
+- **Action:** Implemented Interview Phase UI Tracking & Job Role Presets.
+- **Details:**
+    - Resolved `TS2345` compiler error in `VisionSessionControl.tsx` by updating the boolean `headless` parameter call to an empty string.
+    - Updated `frontend/src/app/front/homepage/page.tsx` to display a role selection modal, dynamically passing the user's selected Job Role as a `?role=` URL parameter.
+    - Created a dictionary of preset Job Roles in `convFlow/main.py`, automatically populating `job_description`, `list_of_technical_topics`, and `interviewer_name` based on frontend selection context.
+    - Intercepted LiveKit stream messaging inside `useConvFlowRoom.ts` and `InterviewRoom.tsx` to extract phase transitions natively emitted by the `InterviewEngine`.
+    - Grouped the final PDF report output into dedicated, phase-wise summary boundaries.
+- **Outcome:** Substantially improved UI feedback and post-interview result clustering while establishing a unified multi-role framework.
+
 ## 2026-04-15
 
 - **Action:** Analyzed `dep.yml` (conda `--from-history` export) for completeness; created macOS startup script.

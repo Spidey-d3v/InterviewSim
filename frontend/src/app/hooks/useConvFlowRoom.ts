@@ -18,6 +18,7 @@ interface UseConvFlowRoomOptions {
   ) => void;
   stream: MediaStream | null;
   userId: string | null;
+  role: string | null;
   enabled: boolean;
 }
 
@@ -27,6 +28,7 @@ export function useConvFlowRoom({
   onNewQuestion,
   stream,
   userId,
+  role,
   enabled,
 }: UseConvFlowRoomOptions) {
   const onTurnEndRef = useRef(onTurnEnd);
@@ -103,7 +105,8 @@ export function useConvFlowRoom({
 
     async function connect() {
       try {
-        const res = await fetch(`${CONVFLOW_BACKEND}/token?user_id=${encodeURIComponent(userId!)}`);
+        const roleQuery = role ? `&role=${encodeURIComponent(role)}` : "";
+        const res = await fetch(`${CONVFLOW_BACKEND}/token?user_id=${encodeURIComponent(userId!)}${roleQuery}`);
         const { token } = await res.json();
         await room.connect(LIVEKIT_URL, token);
         console.log("✅ Connected to Agent Room");
@@ -125,5 +128,5 @@ export function useConvFlowRoom({
       console.log("🧹 Cleanup");
       room.disconnect();
     };
-  }, [enabled, stream, userId]); // Re-connect simple logic
+  }, [enabled, stream, userId, role]); // Re-connect simple logic
 }

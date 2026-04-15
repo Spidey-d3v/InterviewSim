@@ -221,8 +221,39 @@ def create_token(identity: str, room_name: str):
     token.with_grants(VideoGrants(room_join=True, room=room_name))
     return token.to_jwt()
 
+ROLE_PRESETS = {
+    "Full Stack Developer": {
+        "job_description": "Entry-level Full Stack Developer role focused on building and maintaining web applications across both frontend and backend. The role involves developing responsive user interfaces, designing and consuming APIs, working with databases, and understanding basic system design principles. Candidates are expected to have a strong foundation in JavaScript, familiarity with modern frontend frameworks, and basic backend development knowledge. Emphasis is placed on problem-solving ability, clean coding practices, and understanding of end-to-end application flow.",
+        "list_of_technical_topics": "HTML, CSS, JavaScript, React, Node.js, Express.js, REST APIs, CRUD operations, authentication basics, MongoDB/SQL, data structures, asynchronous programming, Git, debugging, system design basics, HTTP/HTTPS, browser rendering, state management",
+        "interviewer_name": "Kate"
+    },
+    "AI Engineer": {
+        "job_description": "AI Engineer focused on designing, developing, and deploying machine learning models and artificial intelligence solutions. Responsibilities include working on natural language processing, computer vision, and predictive analytics. Candidates need a strong background in Python, PyTorch or TensorFlow, data preprocessing, and understanding of transformer architectures.",
+        "list_of_technical_topics": "Python, Machine Learning, Deep Learning, Tensor Flow, PyTorch, Natural Language Processing (NLP), Computer Vision, Transformers, LLMs, Model Deployment, MLOps, Data Preprocessing, Feature Engineering, Neural Networks, Pandas, Scikit-Learn",
+        "interviewer_name": "Alex"
+    },
+    "DevOps Engineer": {
+        "job_description": "DevOps Engineer responsible for managing cloud infrastructure, creating continuous integration and deployment pipelines, and ensuring system reliability and scalability. Must have experience with containerization, orchestration, and infrastructure as code.",
+        "list_of_technical_topics": "Linux, Bash Scripting, Docker, Kubernetes, CI/CD, Jenkins, GitHub Actions, AWS/GCP/Azure, Terraform, Ansible, Monitoring (Prometheus, Grafana), Networking basics, System Administration, Cloud Security",
+        "interviewer_name": "Sarah"
+    },
+    "Electrical and Computer Science Engineer": {
+        "job_description": "Electrical and Computer Science Engineer working interchangeably between hardware and software. Focuses on embedded systems, microcontrollers, digital logic design, and low-level software programming (C/C++).",
+        "list_of_technical_topics": "C, C++, Embedded Systems, Microcontrollers, RTOS, Digital Logic Design, FPGA, Signal Processing, IoT, Computer Architecture, Assembly Language, Hardware-Software Co-design",
+        "interviewer_name": "Michael"
+    },
+    "Cybersecurity": {
+        "job_description": "Cybersecurity Analyst/Engineer dedicated to protecting systems and networks. Role involves penetration testing, vulnerability assessment, incident response, and implementing secure architectures.",
+        "list_of_technical_topics": "Network Security, Penetration Testing, Kali Linux, Incident Response, Cryptography, OWASP Top 10, Firewalls, Threat Modeling, Malware Analysis, Cloud Security, Scripting (Python, Bash), SIEM",
+        "interviewer_name": "Olivia"
+    }
+}
+
 @app.get("/token")
-async def token(user_id: str | None = Query(default=None)):
+async def token(
+    user_id: str | None = Query(default=None),
+    role: str | None = Query(default=None)
+):
     room_name = f"interview_{uuid4().hex}"
     identity = "browser-user"
 
@@ -279,7 +310,27 @@ async def token(user_id: str | None = Query(default=None)):
     }
 
     audio_source = rtc.AudioSource(sample_rate=48000, num_channels=1)
-    interview_engines[room_name] = InterviewEngine(llm, resume_context=resume_context)
+
+    pres_job_role = ""
+    pres_desc = ""
+    pres_topics = ""
+    pres_interviewer = ""
+
+    if role and role in ROLE_PRESETS:
+        preset = ROLE_PRESETS[role]
+        pres_job_role = role
+        pres_desc = preset["job_description"]
+        pres_topics = preset["list_of_technical_topics"]
+        pres_interviewer = preset["interviewer_name"]
+
+    interview_engines[room_name] = InterviewEngine(
+        llm, 
+        resume_context=resume_context,
+        job_role=pres_job_role,
+        job_description=pres_desc,
+        list_of_technical_topics=pres_topics,
+        interviewer_name=pres_interviewer
+    )
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
     async def start_interview():
         try:

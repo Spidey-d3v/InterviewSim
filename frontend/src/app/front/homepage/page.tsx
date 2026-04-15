@@ -19,6 +19,14 @@ export default function HomePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [hasResume, setHasResume] = useState<boolean | null>(null);
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const ROLES = [
+    'Full Stack Developer',
+    'AI Engineer',
+    'DevOps Engineer',
+    'Electrical and Computer Science Engineer',
+    'Cybersecurity'
+  ];
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mlBars, setMlBars] = useState<Array<{ width: number; value: number }>>([]);
   const heroRef = useRef<HTMLDivElement>(null);
@@ -51,11 +59,16 @@ export default function HomePage() {
 
   const handleStartInterview = () => {
     if (hasResume) {
-      router.push('/front/interview');
+      setIsRoleModalOpen(true);
       return;
     }
 
     setIsModalOpen(true);
+  };
+
+  const handleRoleSelect = (role: string) => {
+    setIsRoleModalOpen(false);
+    router.push(`/front/interview?role=${encodeURIComponent(role)}`);
   };
 
   // Generate ML visualization bars on client side only (avoid hydration mismatch)
@@ -434,7 +447,7 @@ export default function HomePage() {
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
               <button 
-                onClick={() => router.push('/interview')}
+                onClick={handleStartInterview}
                 className="px-8 py-4 bg-white text-black font-medium rounded-lg hover:bg-gray-100 transition-all hover:scale-105 text-lg"
               >
                 Try Interview AI
@@ -509,6 +522,37 @@ export default function HomePage() {
           onClose={() => setIsModalOpen(false)}
           onUploadSuccess={() => setHasResume(true)}
         />
+      )}
+
+      {/* Role Selection Modal */}
+      {isRoleModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a24] border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
+            <button 
+              onClick={() => setIsRoleModalOpen(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="text-2xl font-bold mb-2">Select Job Role</h3>
+            <p className="text-gray-400 text-sm mb-6">Choose the role you'd like to interview for.</p>
+            <div className="flex flex-col gap-3">
+              {ROLES.map(role => (
+                <button
+                  key={role}
+                  onClick={() => handleRoleSelect(role)}
+                  className="px-4 py-4 text-left bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-xl transition-all font-medium text-white group flex items-center justify-between"
+                >
+                  {role}
+                  <CheckCircle size={18} className="text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-6 text-center">
+              The AI will customize your interview based on the selected role.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );

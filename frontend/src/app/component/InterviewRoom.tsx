@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { createClient } from '@/utils/supabase';
 import { useVisionSession, type ChunkResult, type GazeLogEntry } from '../hooks/useVisionSession';
@@ -32,6 +32,7 @@ type PersistedChunkMetric = {
 type PersistedQuestionMetric = {
   question_index: number;
   question_text: string;
+  phase?: string;
   chunks: PersistedChunkMetric[];
   question_averages: {
     confidence_score: number | null;
@@ -42,6 +43,8 @@ type PersistedQuestionMetric = {
 
 export default function InterviewRoom() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const role = searchParams.get('role');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -58,6 +61,7 @@ export default function InterviewRoom() {
   const [questionStatus, setQuestionStatus] = useState<'waiting' | 'processing' | 'streaming' | 'ready'>('waiting');
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
   const [activeQuestionStreamId, setActiveQuestionStreamId] = useState<string | null>(null);
+  const [currentPhase, setCurrentPhase] = useState<string>('intro');
   const [interviewSessionId, setInterviewSessionId] = useState<string | null>(null);
   const [interviewStartedAt, setInterviewStartedAt] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -65,11 +69,12 @@ export default function InterviewRoom() {
   const [sessionPersisted, setSessionPersisted] = useState(false);
   const [sessionPersistError, setSessionPersistError] = useState<string | null>(null);
 
-  const questionContextRef = useRef<{ questionIndex: number; questionText: string }>({
+  const questionContextRef = useRef<{ questionIndex: number; questionText: string; phase: string }>({
     questionIndex: 0,
     questionText: 'Introduce yourself.',
+    phase: 'intro',
   });
-  const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string }>>({});
+  const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string; phase: string }>>({});
   const endingInterviewRef = useRef(false);
 
   const handleNewQuestion = useCallback(
@@ -79,6 +84,10 @@ export default function InterviewRoom() {
     ) => {
       const normalized = questionText.trim();
       if (!normalized) return;
+
+      if (meta?.phase) {
+        setCurrentPhase(meta.phase);
+      }
 
       if (meta?.streamId) {
         setActiveQuestionStreamId(meta.streamId);
@@ -133,8 +142,9 @@ export default function InterviewRoom() {
     questionContextRef.current = {
       questionIndex: aiQuestions.length > 0 ? questionIndex : 0,
       questionText: text || 'Introduce yourself.',
+      phase: currentPhase,
     };
-  }, [aiQuestions, questionIndex, streamingQuestion]);
+  }, [aiQuestions, questionIndex, streamingQuestion, currentPhase]);
 
   // Chunked recorder — 15-s chunks auto-uploaded to vision_server
   const {
@@ -155,6 +165,7 @@ export default function InterviewRoom() {
       chunkQuestionMapRef.current[chunkId] = {
         question_index: qCtx.questionIndex,
         question_text: qCtx.questionText,
+        phase: qCtx.phase,
       };
       console.log(`📦 Chunk ${chunkIndex} ready: ${videoPath}`);
       processChunk(videoPath, chunkId, chunkIndex);
@@ -355,12 +366,14 @@ export default function InterviewRoom() {
       const mappedQuestion = chunkQuestionMapRef.current[chunk.chunkId] ?? {
         question_index: 0,
         question_text: 'Introduce yourself.',
+        phase: currentPhase // Fallback
       };
 
       if (!grouped.has(mappedQuestion.question_index)) {
         grouped.set(mappedQuestion.question_index, {
           question_index: mappedQuestion.question_index,
           question_text: mappedQuestion.question_text,
+          phase: mappedQuestion.phase,
           chunks: [],
           question_averages: {
             confidence_score: null,
@@ -535,19 +548,32 @@ export default function InterviewRoom() {
     addWrappedText(`Total Chunks: ${chunkResults.length}`);
     addWrappedText(`Total Questions: ${questionMetrics.length}`, { bottomGap: 8 });
 
-    addWrappedText('Question-wise Breakdown', { bold: true, size: 14, bottomGap: 4 });
+    const phaseGroups = new Map<string, PersistedQuestionMetric[]>();
+    questionMetrics.forEach(q => {
+      const p = q.phase || 'unknown';
+      if (!phaseGroups.has(p)) phaseGroups.set(p, []);
+      phaseGroups.get(p)!.push(q);
+    });
+
+    addWrappedText('Phase-wise Breakdown', { bold: true, size: 14, bottomGap: 4 });
 
     if (questionMetrics.length === 0) {
       addWrappedText('No question metrics available.', { bottomGap: 8 });
     } else {
-      questionMetrics.forEach((q, idx) => {
-        ensureSpace(lineHeight * 6);
-        addWrappedText(`${idx + 1}. ${q.question_text}`, { bold: true });
-        addWrappedText(`Confidence: ${scoreCell(q.question_averages.confidence_score)}`);
-        addWrappedText(`Voice: ${scoreCell(q.question_averages.voice_score)}`);
-        addWrappedText(`Facial: ${scoreCell(q.question_averages.facial_expression_score)}`);
-        addWrappedText(`Chunks: ${q.chunks.length}`, { bottomGap: 6 });
-      });
+      for (const [phase, phaseQs] of phaseGroups.entries()) {
+        ensureSpace(lineHeight * 3);
+        const phaseName = phase.toUpperCase().replace('_', ' ');
+        addWrappedText(`--- PHASE: ${phaseName} ---`, { bold: true, size: 12, bottomGap: 4 });
+        
+        phaseQs.forEach((q, idx) => {
+          ensureSpace(lineHeight * 6);
+          addWrappedText(`Q. ${q.question_text}`, { bold: true });
+          addWrappedText(`Confidence: ${scoreCell(q.question_averages.confidence_score)}`);
+          addWrappedText(`Voice: ${scoreCell(q.question_averages.voice_score)}`);
+          addWrappedText(`Facial: ${scoreCell(q.question_averages.facial_expression_score)}`);
+          addWrappedText(`Chunks: ${q.chunks.length}`, { bottomGap: 6 });
+        });
+      }
     }
 
     addWrappedText('Generated from actual session data only (no synthetic placeholders).', {
@@ -599,6 +625,7 @@ export default function InterviewRoom() {
     onNewQuestion: handleNewQuestion,
     stream: cameraStream,
     userId: currentUserId,
+    role: role,
     enabled: interviewStarted,
   });
 
@@ -772,7 +799,7 @@ export default function InterviewRoom() {
                   <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
                 </svg>
                 <span className="text-sm font-medium">
-                  {interviewStarted ? 'AI Monitoring' : 'Calibrating'}
+                  {interviewStarted ? `AI Monitoring • Phase: ${currentPhase.toUpperCase().replace('_', ' ')}` : 'Calibrating'}
                 </span>
               </div>
             </div>

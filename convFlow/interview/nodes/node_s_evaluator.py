@@ -37,7 +37,7 @@ Return STRICT JSON:
 {{
     "overall": int,
     "metrics": {{
-        {', '.join([f'\"{m}\": int' for m in metrics])}
+        {', '.join([f'"{m}": int' for m in metrics])}
     }},
     "advice": [
         "string",

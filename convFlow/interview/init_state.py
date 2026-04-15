@@ -28,7 +28,7 @@ def create_initial_state():
         "candidate_profile": {
             "experience_level": "fresher",
 
-            "scores": {
+            "scores": { #phasewise scoring
                 "intro": {},
                 "resume": {},
                 "core_tech": {},

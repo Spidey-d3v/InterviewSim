@@ -221,7 +221,7 @@ class InterviewEngine:
             selected_context = q_output.get("context_for_generator", "")
 
             # -------------------- PHASE SWITCH --------------------
-            self.state["phase"] = q_output.get("next_phase", self.state["phase"])
+            self.state["phase"] = q_output.get("next_phase", self.state["phase"]) # phase change
             self.state["phase_question_count"] = 0
             self.state["phase_word_count"] = 0
             self.state["phase_transcript"] = ""

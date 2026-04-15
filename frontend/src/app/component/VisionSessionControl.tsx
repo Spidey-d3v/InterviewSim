@@ -47,13 +47,13 @@ export default function VisionSessionControl({
   // Auto-start if enabled
   useEffect(() => {
     if (autoStart && isConnected && !isSessionActive) {
-      startSession(headless);
+      startSession("");
     }
-  }, [autoStart, isConnected, isSessionActive, startSession, headless]);
+  }, [autoStart, isConnected, isSessionActive, startSession]);
 
   const handleStartSession = () => {
     setShowResults(false);
-    startSession(headless);
+    startSession("");
   };
 
   const handleStopSession = () => {

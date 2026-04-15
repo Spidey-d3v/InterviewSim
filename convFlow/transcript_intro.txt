@@ -1,14 +1,32 @@
 
-Interviewer: Hi Gaurav, thanks for joining us today! I'm [Interviewer Name] from GST, and we're excited to talk to you about our Full Stack Developer role. To kick things off, could you please introduce yourself, tell us a bit about your background, and what makes you a great fit for this position?
-Candidate: Yeah, hi my name is gaurav ghosh and I am a full start developer in turn at my at a project in my college right now and I have experience working on HTML, CSS, React and JavaScript and I think I am a great fit for this position because I think I have the relevant expertise for the job description and I am a quick learner. nan
+Interviewer: Hi Gaurav, thanks for joining us today. We're excited to talk to you about the DevOps Engineer role here at Apple. To kick things off, could you please introduce yourself and tell us a bit about your background and why you think you'd be a great fit for this position?
+Candidate: I have worked a lot in the box.
 
-Interviewer: That's great to hear, Gaurav! It sounds like you've already been diving into some exciting projects. Before we get into the technical details, could you expand a little on your experience with full-stack development, perhaps highlighting a project or two that you feel best showcase your skills for this role at GST?
-Candidate: Yes sir. Yeah so I made a scalable full full stack music streaming website using life kit for deploying multiple rooms and the front end was made using React and HTML and CSS and the backend logic was done using Python. nan
+Interviewer: Thanks for that brief introduction, Gaurav. It's great to hear you've been working "in the box" – that's a good start! To help me understand your experience a bit better, could you elaborate on what you mean by that? What specific projects or technologies have you been working with that you feel are most relevant to a DevOps Engineer role here at Apple?
+Candidate: nan Can you step the introduction phase and move on to the next phase?
 
-Interviewer: Okay, Gaurav, that sounds like an interesting project! To get a better sense of your end-to-end development capabilities, could you walk me through the architecture of that music streaming website? Specifically, I'm curious about how you handled the backend logic with Python and how you managed the deployment of multiple rooms.
-Candidate: Haan, abhi ek interview is thinking I am speaking with clear and clear jaata hai.
+Interviewer: Absolutely, Gaurav. Thanks for clarifying. I appreciate you wanting to move forward. Let's definitely do that.
 
-Interviewer: Thanks for that detailed explanation, Gaurav. It's great to hear about your experience with that project.
+So, to get a better understanding of your technical skills, could you tell me about your experience with cloud infrastructure? What cloud platforms have you worked with, and what kind of tasks have you performed on them?
+Candidate: nan I have used AWS and a few other platforms for hosting.
 
-Now, let's shift gears a bit. We've talked about your technical skills and project experience. To understand your problem-solving approach better, could you tell me about a time you encountered a particularly challenging bug in one of your projects? How did you go about identifying and fixing it?
-Candidate: Yeah so basically I trained a new world that recommender model in python and So I encountered a bug when I was integrading multiple components into a single architecture because me and my 2 friends were working separately on their own devices in their own python environment and when the time came to make it a cohesive system, I encountered some issues with the libraries and just hardware specific implementations. So I had to look over our documentation which we had maintain timely, so that really saved me a lot of hassle and that was how I went about fixing it.
+Interviewer: Okay, AWS is a great start. Could you elaborate a bit on "a few other platforms"? And when you say you've used them for hosting, what specific types of services or resources did you manage within those platforms?
+Candidate: nan Full on serverful backend hosting with lot of features like fetching different kind of CSB files and property processing them and putting them into AI models and getting the output and showing it in the front. In the front end.
+
+Interviewer: Thanks for that detailed explanation, Gaurav. It sounds like you've had some hands-on experience with full-stack development and integrating backend processes with AI models. That's definitely relevant to the kind of work we do here.
+
+To help me understand your experience a bit better, could you tell me about a specific project where you utilized these skills? What was the problem you were trying to solve, and what was your role in bringing it to completion?
+Candidate: nan My interview has 4 phases. Can you tell me which phase I am on right now?
+
+Interviewer: We're actually in the middle of our introduction phase right now, Gaurav. We've just finished your initial introduction and I was about to ask you about a specific project. But before we dive into that, could you tell me about a project where you used your full-stack and AI integration skills? What problem were you solving, and what was your role in getting it done?
+Candidate: nan Please move on to next phase. I am testing the interview platform right now that you are correctly working on. Please move on to the next phase.
+
+Interviewer: Thank you for letting me know, Gaurav. I appreciate you testing the platform for us. We'll proceed to the next phase then.
+
+Now that we've covered introductions, let's dive a bit deeper into your technical background. Your resume mentions extensive experience with **CI/CD pipelines** and **Docker**. Could you walk me through a project where you were responsible for setting up and managing a CI/CD pipeline, and how you utilized Docker within that process?
+Candidate: nan In my front end the AI monitoring page still shows in through. Are you sure in the back end the phase has changed?
+
+Interviewer: That's an interesting observation about the AI monitoring page, Gaurav. I appreciate you pointing that out and testing the platform. We'll definitely take that feedback into consideration.
+
+Now, let's shift gears and focus on the technical aspects of the DevOps Engineer role. Your resume highlights your experience with **CI/CD pipelines** and **Docker**. Could you walk me through a specific project where you were responsible for setting up and managing a CI/CD pipeline? What was your approach, and how did you leverage Docker in that process?
+Candidate: nan Let's end the interview right now.
