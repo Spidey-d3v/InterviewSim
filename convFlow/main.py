@@ -25,7 +25,8 @@ import os
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-load_dotenv()
+from pathlib import Path
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 # Initialize Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -536,9 +537,14 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                 # Publish turn_end data message to LiveKit room so frontend flushes video
                 agent_room_ref = rooms[room_name]
                 await agent_room_ref.local_participant.publish_data(
-                    json.dumps({"event": "turn_end", "ts": time.time(), "transcript": transcript}).encode(),
+                    json.dumps({
+                        "event": "turn_end", 
+                        "ts": time.time(),
+                        "transcript": transcript  # Added transcript text
+                    }).encode(),
                     reliable=True,
                 )
+
                 print("📡 Sent turn_end to frontend")
 
                 state["vad_buffer"] = np.zeros(0, dtype=np.float32)

@@ -7,7 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from supabase import create_client, Client
 
-load_dotenv()
+from pathlib import Path
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 # Initialize Clients
 SUPABASE_URL = os.getenv("SUPABASE_URL")

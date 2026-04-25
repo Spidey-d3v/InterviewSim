@@ -1,0 +1,10 @@
+
+Interviewer: Great, thanks for that detailed explanation of your e-commerce project. It sounds like you gained some valuable experience there.
+
+Now, let's dive a bit deeper into some core technical concepts. We'll start with JavaScript. Can you explain the difference between `null` and `undefined` in JavaScript, and provide a scenario where you might encounter each?
+Candidate: Next page will again on the
+
+Interviewer: That's a good start, Gaurav. You've touched on some key differences. To clarify a bit further, `undefined` typically means a variable has been declared but not yet assigned a value, or a function parameter wasn't provided. `null`, on the other hand, is an intentional assignment of "no value" to a variable.
+
+Can you think of a specific situation in your e-commerce project where you might have intentionally set a variable to `null`, or where a variable might have naturally become `undefined`?
+Candidate: Would like to skip and let's move to next

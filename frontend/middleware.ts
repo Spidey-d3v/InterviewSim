@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
   const expiresAt = expiresAtValue ? Number(expiresAtValue) : null
   const isExpired = !expiresAt || Number.isNaN(expiresAt) || Date.now() >= expiresAt
 
-  if (isExpired && (isRootRoute || isFrontRoute)) {
+  if (isExpired && isFrontRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     const redirectResponse = NextResponse.redirect(url)
