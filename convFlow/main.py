@@ -261,11 +261,12 @@ async def token(
     identity = "browser-user"
 
     resume_context = ""
+    candidate_name = ""
     if user_id:
         try:
             profile_res = (
                 supabase.table("profiles")
-                .select("resume_text, resume_json")
+                .select("resume_text, resume_json, full_name")
                 .eq("id", user_id)
                 .limit(1)
                 .execute()
@@ -278,6 +279,14 @@ async def token(
             if profile:
                 resume_text = (profile.get("resume_text") or "").strip()
                 resume_json = profile.get("resume_json")
+                
+                # Prioritize name from Parsed Resume
+                if resume_json and isinstance(resume_json, dict):
+                    candidate_name = resume_json.get("candidate_name") or ""
+                
+                # Fallback to profile name only if resume name is missing
+                if not candidate_name:
+                    candidate_name = profile.get("full_name") or ""
 
                 if resume_text:
                     resume_context += f"Resume Text:\n{resume_text[:3000]}\n\n"
@@ -332,7 +341,8 @@ async def token(
         job_role=pres_job_role,
         job_description=pres_desc,
         list_of_technical_topics=pres_topics,
-        interviewer_name=pres_interviewer
+        interviewer_name=pres_interviewer,
+        candidate_name=candidate_name
     )
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
     async def start_interview():
@@ -382,8 +392,49 @@ async def token(
 
     @agent_room.on("participant_disconnected")
     def on_participant_disconnected(participant):
-        print(f"👋 User left room {room_name}. Force cleaning...")
-        cleanup_room(room_name)
+      print(f"👋 User left room {room_name}. Force cleaning...")
+      cleanup_room(room_name)
+
+    @agent_room.on("data_received")
+    def on_data_received(data: rtc.DataPacket):
+      try:
+        msg = json.loads(data.data.decode())
+        event = msg.get("event")
+        state = room_states.get(room_name)
+        if not state: return
+
+        if event == "pause":
+          print(f"⏸ Pause received for {room_name}")
+          state["tts_busy"] = True # Blocks audio processing
+          state["buffer"].reset()
+          state["progressive_stt"].reset()
+          if room_name in voice_agents:
+            voice_agents[room_name].stop_tts() # Stop current speech
+
+        if event == "repeat_question":
+          print(f"▶️ Resume/Repeat received for {room_name}")
+          state["tts_busy"] = True # Block STT immediately
+          state["buffer"].reset()
+          state["progressive_stt"].reset()
+          
+          if room_name in voice_agents:
+            async def re_ask():
+              async with state["tts_lock"]:
+                try:
+                  last_q = interview_engines[room_name].get_last_question()
+                  if last_q:
+                    async def on_update(text, final): 
+                      await publish_new_question(room_name, text, is_final=final)
+                    await voice_agents[room_name].repeat_question(last_q, on_question_update=on_update)
+                finally:
+                   # Clear any noise captured during the repeat
+                   state["buffer"].reset()
+                   state["progressive_stt"].reset()
+                   state["tts_busy"] = False
+            asyncio.create_task(re_ask())
+
+      except Exception as e:
+        print(f"⚠️ Error handling data packet: {e}")
 
     def cleanup_room(name):
         rooms.pop(name, None)

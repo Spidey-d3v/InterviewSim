@@ -16,10 +16,10 @@ import AnalyticsPanel from './interview/AnalyticsPanel';
 import { InterviewHeader, InterviewMainDisplay, InterviewControls } from './interview/InterviewUI';
 
 // Types & Utils
-import { 
-  type PersistedQuestionMetric, 
-  type InterviewPhaseScores, 
-  type QuestionStatus 
+import {
+  type PersistedQuestionMetric,
+  type InterviewPhaseScores,
+  type QuestionStatus
 } from '../../types/interview';
 import { formatTime, mean, buildChunkGazeDistribution } from '../../utils/interview-metrics';
 
@@ -33,7 +33,7 @@ export default function InterviewRoom() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const role = searchParams.get('role');
-  
+
   // -- Refs for persistent state without re-renders --
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,6 +50,7 @@ export default function InterviewRoom() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isPaused, setIsPaused] = useState(false);
 
   // -- AI Conversation State --
   const [aiQuestions, setAiQuestions] = useState<string[]>([]);
@@ -58,7 +59,7 @@ export default function InterviewRoom() {
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
   const [activeQuestionStreamId, setActiveQuestionStreamId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<string>('intro');
-  
+
   // -- Session/Persistence State --
   const [interviewSessionId, setInterviewSessionId] = useState<string | null>(null);
   const [interviewStartedAt, setInterviewStartedAt] = useState<string | null>(null);
@@ -111,7 +112,7 @@ export default function InterviewRoom() {
     // is called with (msg.question_text || msg.text).
     const normalized = questionText?.trim();
     if (!normalized) return;
-    
+
     if (meta?.phase) setCurrentPhase(meta.phase);
     if (meta?.stream_id) setActiveQuestionStreamId(meta.stream_id);
 
@@ -172,11 +173,11 @@ export default function InterviewRoom() {
 
   const buildQuestionMetrics = (): PersistedQuestionMetric[] => {
     const grouped = new Map<number, PersistedQuestionMetric>();
-    
+
     // 1. Group chunks by their corresponding question
     [...chunkResults].sort((a, b) => a.chunkIndex - b.chunkIndex).forEach((chunk) => {
       const qCtx = chunkQuestionMapRef.current[chunk.chunkId] || { question_index: 0, question_text: 'Intro', phase: 'intro' };
-      
+
       if (!grouped.has(qCtx.question_index)) {
         grouped.set(qCtx.question_index, {
           question_index: qCtx.question_index,
@@ -223,12 +224,16 @@ export default function InterviewRoom() {
   const handleLeave = async () => {
     if (endingInterviewRef.current) return;
     endingInterviewRef.current = true;
+
+    // Phase 1 Fix: Stop everything immediately
+    disconnectRoom();
+    releaseStream();
+
     if (document.fullscreenElement) await document.exitFullscreen();
     if (isChunkRecording) stopRecorder();
     if (interviewStarted) setShowResults(true);
     else {
-      releaseStream();
-      router.push('/front/homepage');
+      router.push('/');
     }
   };
 
@@ -261,50 +266,70 @@ export default function InterviewRoom() {
     return () => clearInterval(timer);
   }, [isChunkRecording]);
 
-  useConvFlowRoom({
+  const { disconnect: disconnectRoom, sendData } = useConvFlowRoom({
     onTurnEnd: handleTurnEnd,
     onInterviewEnd: handleInterviewEnd,
     onNewQuestion: handleNewQuestion,
     stream: cameraStream,
+    isAiSpeaking: questionStatus === 'streaming' || isPaused,
   });
+
+  const togglePause = useCallback(async () => {
+    const nextPaused = !isPaused;
+    setIsPaused(nextPaused);
+
+    if (nextPaused) {
+      console.log("⏸ Interview Paused");
+      if (isChunkRecording) stopRecorder();
+      await sendData({ event: 'pause' });
+    } else {
+      console.log("▶️ Interview Resumed");
+      if (cameraStream) startRecorder(cameraStream);
+      // Repeat question if it hasn't been answered yet
+      await sendData({ event: 'repeat_question' });
+    }
+  }, [isPaused, isChunkRecording, stopRecorder, startRecorder, cameraStream, sendData]);
 
   return (
     <div ref={containerRef} className="min-h-screen bg-[#0a0a0f] text-white flex flex-col overflow-hidden">
       {showCalibration && (
-        <CalibrationFlow 
-            onComplete={() => {
-                setShowCalibration(false);
-                setInterviewStarted(true);
-                setInterviewSessionId(crypto.randomUUID());
-                setInterviewStartedAt(new Date().toISOString());
-                containerRef.current?.requestFullscreen();
-                if (cameraStream) startRecorder(cameraStream);
-            }} 
-            onCalibrate={() => {}} calibrated={true} screenCalibrated={true} 
+        <CalibrationFlow
+          onComplete={() => {
+            setShowCalibration(false);
+            setInterviewStarted(true);
+            setInterviewSessionId(crypto.randomUUID());
+            setInterviewStartedAt(new Date().toISOString());
+            containerRef.current?.requestFullscreen();
+            if (cameraStream) startRecorder(cameraStream);
+          }}
+          onCalibrate={() => { }} calibrated={true} screenCalibrated={true}
         />
       )}
 
-      <InterviewHeader 
-        isChunkRecording={isChunkRecording} chunkCount={chunkCount} recordingTime={recordingTime} 
+      <InterviewHeader
+        isChunkRecording={isChunkRecording} chunkCount={chunkCount} recordingTime={recordingTime}
         pendingChunks={pendingChunks} isFullscreen={isFullscreen} interviewStarted={interviewStarted}
-        visionConnected={visionConnected} visionError={visionError} 
+        visionConnected={visionConnected} visionError={visionError}
         permissionStatus={permissionStatus} permissionError={null}
-        onExitFullscreen={() => document.exitFullscreen()} 
+        isPaused={isPaused}
+        onExitFullscreen={() => document.exitFullscreen()}
         onEnterFullscreen={() => containerRef.current?.requestFullscreen()}
         onLeave={handleLeave} formatTime={formatTime}
       />
 
       <div className="flex-1 flex relative overflow-hidden">
-        <InterviewMainDisplay 
+        <InterviewMainDisplay
           videoRef={videoRef} permissionStatus={permissionStatus} permissionError={null}
           interviewStarted={interviewStarted} currentPhase={currentPhase} questionStatus={questionStatus}
           streamingQuestion={streamingQuestion} aiQuestions={aiQuestions} questionIndex={questionIndex}
-          isChunkRecording={isChunkRecording} onPrev={() => setQuestionIndex(i => Math.max(0, i-1))}
-          onNext={() => setQuestionIndex(i => Math.min(aiQuestions.length-1, i+1))}
+          isChunkRecording={isChunkRecording} isPaused={isPaused}
+          onPrev={() => setQuestionIndex(i => Math.max(0, i - 1))}
+          onNext={() => setQuestionIndex(i => Math.min(aiQuestions.length - 1, i + 1))}
         />
 
-        <AnalyticsPanel 
-          isVisible={interviewStarted} chunkResults={chunkResults} latestConfidence={latestConfidence}
+        <AnalyticsPanel
+          isVisible={interviewStarted && !isPaused} chunkResults={chunkResults} latestConfidence={latestConfidence}
+
           latestVoiceScore={latestVoiceScore} latestFacialScore={latestFacialScore}
           pendingChunks={pendingChunks} pendingUploads={pendingUploads} isChunkRecording={isChunkRecording}
         />
@@ -321,12 +346,13 @@ export default function InterviewRoom() {
         )}
       </div>
 
-      <InterviewControls 
-        isChunkRecording={isChunkRecording} cameraStream={cameraStream} 
-        onStop={stopRecorder} onStart={(s) => startRecorder(s)} onLeave={handleLeave} 
+      <InterviewControls
+        isChunkRecording={isChunkRecording} cameraStream={cameraStream}
+        isPaused={isPaused} onTogglePause={togglePause}
+        onStop={stopRecorder} onStart={(s) => startRecorder(s)} onLeave={handleLeave}
       />
 
-      <ResultsModal 
+      <ResultsModal
         show={showResults} chunkResults={chunkResults} questionMetrics={buildQuestionMetrics()}
         finalScores={finalScores} interviewSessionId={interviewSessionId} interviewStartedAt={interviewStartedAt}
         currentUserId={currentUserId} recordingTime={recordingTime} pendingUploads={pendingUploads}

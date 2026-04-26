@@ -58,6 +58,38 @@ class StreamingVoiceAgent:
         self.turn_start = None
         self.first_audio_emitted = None
         self.tts_queue = asyncio.Queue()
+        self.tts_task_ref = None
+
+    def stop_tts(self):
+        """Immediately stop current speech generation and playback."""
+        print("🔇 Stopping Agent TTS playback")
+        while not self.tts_queue.empty():
+            try:
+                self.tts_queue.get_nowait()
+                self.tts_queue.task_done()
+            except: break
+        
+        if self.tts_task_ref:
+            self.tts_task_ref.cancel()
+            self.tts_task_ref = None
+
+    async def repeat_question(
+        self,
+        question_text: str,
+        on_question_update: Callable[[str, bool], Awaitable[None]] | None = None,
+    ):
+        """Force the agent to re-synthesize and speak a specific question."""
+        print(f"🔄 Repeating question: {question_text[:50]}...")
+        self.turn_start = asyncio.get_event_loop().time()
+        self.first_audio_emitted = False
+        
+        if on_question_update:
+            await on_question_update(question_text, True)
+
+        self.tts_task_ref = asyncio.create_task(self._tts_worker())
+        self.tts_queue.put_nowait(question_text)
+        self.tts_queue.put_nowait(None) # End signal
+        await self.tts_queue.join()
 
     async def _tts_worker(self):
         while True:

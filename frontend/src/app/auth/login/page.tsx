@@ -40,7 +40,7 @@ export default function Login() {
       if (data.session) {
         const expiresAt = Date.now() + DEV_SESSION_TTL_MINUTES * 60 * 1000;
         document.cookie = `app_session_expires_at=${expiresAt}; Path=/; SameSite=Lax`;
-        router.push("/front/homepage");
+        router.push("/");
       }
     } catch (error: any) {
       console.error("Login failed:", error.message);

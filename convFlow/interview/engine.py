@@ -46,6 +46,9 @@ class InterviewEngine:
         if interviewer_name:
             self.state["interviewer_name"] = interviewer_name
     
+    def get_last_question(self) -> str | None:
+        return self.state.get("last_question")
+
     async def _run_evaluator(self, phase, transcript):
         result = await node_s_evaluator(self.llm, phase, transcript)
 

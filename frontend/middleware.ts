@@ -62,7 +62,7 @@ export async function middleware(request: NextRequest) {
 
   if (user && isAuthRoute && !isExpired) {
     const url = request.nextUrl.clone()
-    url.pathname = '/front/homepage'
+    url.pathname = '/'
     return NextResponse.redirect(url)
   }
 

@@ -15,6 +15,7 @@ interface HeaderProps {
   visionError: string | null;
   permissionStatus: string;
   permissionError: string | null;
+  isPaused: boolean;
   onExitFullscreen: () => void;
   onEnterFullscreen: () => void;
   onLeave: () => void;
@@ -32,6 +33,7 @@ export function InterviewHeader({
   visionError,
   permissionStatus,
   permissionError,
+  isPaused,
   onExitFullscreen,
   onEnterFullscreen,
   onLeave,
@@ -42,12 +44,17 @@ export function InterviewHeader({
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center font-bold text-sm">AI</div>
         <span className="text-xl font-bold tracking-tight">InterviewAR</span>
-        {isChunkRecording && (
+        {isPaused ? (
+          <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded-full">
+            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+            <span className="text-sm text-yellow-400 font-mono font-bold uppercase tracking-widest">Paused</span>
+          </div>
+        ) : isChunkRecording ? (
           <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
             <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
             <span className="text-sm text-red-400 font-mono">● Chunk {chunkCount} | {formatTime(recordingTime)}</span>
           </div>
-        )}
+        ) : null}
         {pendingChunks > 0 && (
           <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded-full">
             <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
@@ -88,6 +95,7 @@ interface MainDisplayProps {
   aiQuestions: string[];
   questionIndex: number;
   isChunkRecording: boolean;
+  isPaused: boolean;
   onPrev: () => void;
   onNext: () => void;
 }
@@ -103,6 +111,7 @@ export function InterviewMainDisplay({
   aiQuestions,
   questionIndex,
   isChunkRecording,
+  isPaused,
   onPrev,
   onNext,
 }: MainDisplayProps) {
@@ -122,7 +131,19 @@ export function InterviewMainDisplay({
             </div>
           )}
 
-          {isChunkRecording && <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-red-600/80 backdrop-blur-sm rounded-full animate-pulse text-[10px] font-bold">REC</div>}
+          {isPaused && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-10">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
+                  <svg className="w-10 h-10 text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </div>
+                <h2 className="text-3xl font-bold text-white mb-2 uppercase tracking-tighter">Session Paused</h2>
+                <p className="text-gray-400">Press Play to continue the interview</p>
+              </div>
+            </div>
+          )}
+
+          {isChunkRecording && !isPaused && <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-red-600/80 backdrop-blur-sm rounded-full animate-pulse text-[10px] font-bold">REC</div>}
 
           <div className="absolute top-4 right-4 px-3 py-2 bg-gradient-to-br from-purple-500/80 to-pink-500/80 backdrop-blur-sm rounded-lg border border-white/30 text-xs font-medium">
             {interviewStarted ? `AI Monitoring • Phase: ${currentPhase.toUpperCase().replace('_', ' ')}` : 'Calibrating'}
@@ -156,6 +177,8 @@ export function InterviewMainDisplay({
 interface ControlsProps {
   isChunkRecording: boolean;
   cameraStream: MediaStream | null;
+  isPaused: boolean;
+  onTogglePause: () => void;
   onStop: () => void;
   onStart: (s: MediaStream) => void;
   onLeave: () => void;
@@ -164,17 +187,34 @@ interface ControlsProps {
 export function InterviewControls({
   isChunkRecording,
   cameraStream,
+  isPaused,
+  onTogglePause,
   onStop,
   onStart,
   onLeave,
 }: ControlsProps) {
   return (
     <div className="px-6 py-6 border-t border-white/10 flex items-center justify-center gap-6 bg-[#0a0a0f]">
+      {/* RECORD BUTTON */}
+      {!isPaused && (
+        <button
+          onClick={() => isChunkRecording ? onStop() : (cameraStream && onStart(cameraStream))}
+          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-xl ${isChunkRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}
+        >
+          <div className={`w-5 h-5 ${isChunkRecording ? 'rounded-sm' : 'rounded-full'} bg-white transition-all`} />
+        </button>
+      )}
+
+      {/* PAUSE/RESUME BUTTON */}
       <button
-        onClick={() => isChunkRecording ? onStop() : (cameraStream && onStart(cameraStream))}
-        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-xl ${isChunkRecording ? 'bg-red-500 hover:bg-red-600 animate-pulse' : 'bg-white/10 hover:bg-white/20'}`}
+        onClick={onTogglePause}
+        className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-xl ${isPaused ? 'bg-green-500 hover:bg-green-600' : 'bg-white/10 hover:bg-white/20'}`}
       >
-        <div className={`w-5 h-5 ${isChunkRecording ? 'rounded-sm' : 'rounded-full'} bg-white transition-all`} />
+        {isPaused ? (
+          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        ) : (
+          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        )}
       </button>
 
       <button onClick={() => confirm('End the interview and see results?') && onLeave()} className="ml-4 px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-medium rounded-full transition-all flex items-center gap-2 shadow-lg">

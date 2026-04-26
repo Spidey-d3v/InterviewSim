@@ -51,15 +51,15 @@ export default function ResultsModal({
 }: ResultsModalProps) {
   const router = useRouter();
 
-  const exportInterviewReport = useCallback(async () => {
-    const allGaze = chunkResults.flatMap((c) => c.gaze_data);
-    const totalGaze = allGaze.length;
-    const focusedGaze = allGaze.filter((e) => {
-        const s = (e.status || '').toLowerCase();
-        return !s.includes('away') && (s.includes('forward') || s.includes('left') || s.includes('right') || s.includes('down'));
-    }).length;
-    const focusPct = totalGaze > 0 ? (focusedGaze / totalGaze) * 100 : 0;
+  // Calculate overall gaze stats for both UI and PDF
+  const totalGazeStats = chunkResults.reduce((acc, c) => {
+    const counts = getChunkGazeCounts(c);
+    return { focused: acc.focused + counts.focused, total: acc.total + counts.total };
+  }, { focused: 0, total: 0 });
 
+  const focusPct = totalGazeStats.total > 0 ? (totalGazeStats.focused / totalGazeStats.total) * 100 : 0;
+
+  const exportInterviewReport = useCallback(async () => {
     const voiceVals = chunkResults
       .map((c) => c.voice_analysis?.score)
       .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
@@ -195,10 +195,7 @@ export default function ResultsModal({
         <div className="p-6">
           {/* Summary Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <StatCard label="Focus Score" value={`${mean(chunkResults.map(c => {
-                const counts = getChunkGazeCounts(c);
-                return counts.total > 0 ? (counts.focused / counts.total) * 100 : 0;
-              }))?.toFixed(1) ?? 0}%`} color="blue" />
+            <StatCard label="Focus Score" value={`${focusPct.toFixed(1)}%`} color="blue" />
             <StatCard label="Voice Skills" value={scoreCell(mean(chunkResults.map(c => c.voice_analysis?.score)))} color="emerald" />
             <StatCard label="Avg Confidence" value={scoreCell(mean(chunkResults.flatMap(c => c.predictions.map(p => p.confidence))))} color="purple" />
             <StatCard label="Facial Expression" value={scoreCell(mean(chunkResults.map(c => c.facial_analysis?.score)))} color="green" />

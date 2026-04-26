@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import {
   Room,
   RoomEvent,
@@ -14,12 +14,20 @@ interface UseConvFlowRoomOptions {
   onInterviewEnd?: (scores: any) => void;
   onNewQuestion?: (text: string, meta?: any) => void;
   stream: MediaStream | null;
+  isAiSpeaking?: boolean;
 }
 
-export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stream }: UseConvFlowRoomOptions) {
+export function useConvFlowRoom({ 
+  onTurnEnd, 
+  onInterviewEnd, 
+  onNewQuestion, 
+  stream,
+  isAiSpeaking = false 
+}: UseConvFlowRoomOptions) {
   const onTurnEndRef = useRef(onTurnEnd);
   const onInterviewEndRef = useRef(onInterviewEnd);
   const onNewQuestionRef = useRef(onNewQuestion);
+  const roomRef = useRef<Room | null>(null);
 
   useEffect(() => {
     onTurnEndRef.current = onTurnEnd;
@@ -27,10 +35,28 @@ export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stre
     onNewQuestionRef.current = onNewQuestion;
   }, [onTurnEnd, onInterviewEnd, onNewQuestion]);
 
+  // Phase 2 Fix: Mute local mic when AI is speaking
+  useEffect(() => {
+    const room = roomRef.current;
+    if (room && room.localParticipant) {
+      const audioPublication = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+      if (audioPublication && audioPublication.track) {
+        if (isAiSpeaking) {
+          console.log("🤐 Muting local mic (AI speaking)");
+          audioPublication.track.mute();
+        } else {
+          console.log("🎤 Unmuting local mic");
+          audioPublication.track.unmute();
+        }
+      }
+    }
+  }, [isAiSpeaking]);
+
   useEffect(() => {
     if (!stream) return;
 
     const room = new Room();
+    roomRef.current = room;
 
     room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
       if (track.kind === Track.Kind.Audio) {
@@ -71,7 +97,7 @@ export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stre
         await room.connect(LIVEKIT_URL, token);
         console.log("✅ Connected to Agent Room");
 
-        if (stream.getAudioTracks().length > 0) {
+        if (stream && stream.getAudioTracks().length > 0) {
           const { LocalAudioTrack } = await import("livekit-client");
           const audioTrack = stream.getAudioTracks()[0];
           await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack));
@@ -87,6 +113,24 @@ export function useConvFlowRoom({ onTurnEnd, onInterviewEnd, onNewQuestion, stre
     return () => {
       console.log("🧹 Cleanup");
       room.disconnect();
+      roomRef.current = null;
     };
   }, [stream]);
+
+  const disconnect = useCallback(() => {
+    if (roomRef.current) {
+      console.log("🛑 Explicitly disconnecting from LiveKit room");
+      roomRef.current.disconnect();
+      roomRef.current = null;
+    }
+  }, []);
+
+  const sendData = useCallback(async (data: any) => {
+    if (roomRef.current && roomRef.current.localParticipant) {
+      const payload = new TextEncoder().encode(JSON.stringify(data));
+      await roomRef.current.localParticipant.publishData(payload, { reliable: true });
+    }
+  }, []);
+
+  return { disconnect, sendData };
 }
