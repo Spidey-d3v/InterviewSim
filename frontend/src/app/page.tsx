@@ -1,28 +1,26 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { UploadCloud, FileText, X, CheckCircle, Loader2 } from 'lucide-react';
-import ResumeUploadModal from './component/ResumeUploadModal'; 
+import { UploadCloud, X, CheckCircle } from 'lucide-react';
+import ResumeUploadModal from './component/ResumeUploadModal';
 import { createClient } from '@/utils/supabase';
 
-function useMounted() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  return mounted;
-}
-
-export default function LandingPage() { 
+export default function LandingPage() {
   const router = useRouter();
-  const supabase = createClient();
-  const mounted = useMounted();
-  
+  const supabase = useMemo(() => createClient(), []);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [hasResume, setHasResume] = useState<boolean | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [mlBars, setMlBars] = useState<Array<{ width: number; value: number }>>([]);
+  const [mlBars] = useState<Array<{ width: number; value: number }>>(() =>
+    Array.from({ length: 12 }).map(() => ({
+      width: Math.random() * 40 + 60,
+      value: Math.random() * 0.3 + 0.7,
+    }))
+  );
   const heroRef = useRef<HTMLDivElement>(null);
 
   const ROLES = [
@@ -33,7 +31,7 @@ export default function LandingPage() {
     'Cybersecurity'
   ];
 
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async () => {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
       setIsLoggedIn(false);
@@ -56,7 +54,7 @@ export default function LandingPage() {
     } else {
       setHasResume(false);
     }
-  };
+  }, [supabase]);
 
   const handleStartInterview = () => {
     if (!isLoggedIn) {
@@ -84,14 +82,11 @@ export default function LandingPage() {
   };
 
   useEffect(() => {
-    checkAuthStatus();
-    setMlBars(
-      Array.from({ length: 12 }).map(() => ({
-        width: Math.random() * 40 + 60,
-        value: Math.random() * 0.3 + 0.7
-      }))
-    );
-  }, []);
+    const timer = window.setTimeout(() => {
+      void checkAuthStatus();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [checkAuthStatus]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => setMousePosition({ x: e.clientX, y: e.clientY });
@@ -113,8 +108,6 @@ export default function LandingPage() {
     document.querySelectorAll('.fade-in-section').forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, []);
-
-  if (!mounted) return null;
 
   const stats = [
     { value: '250K+', label: 'Interviews Conducted' },
@@ -159,7 +152,7 @@ export default function LandingPage() {
       {/* Animated Grid Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_80%_50%_at_50%_50%,black,transparent)]" />
-        <div 
+        <div
           className="absolute inset-0 opacity-30"
           style={{
             background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(139, 92, 246, 0.08), transparent 40%)`
@@ -173,7 +166,7 @@ export default function LandingPage() {
           <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center font-bold text-sm">AI</div>
           <span className="text-xl font-bold tracking-tight">InterviewAR</span>
         </div>
-        
+
         <div className="hidden md:flex items-center gap-8 text-sm">
           <a href="#product" className="text-gray-400 hover:text-white transition-colors">Product</a>
           <a href="#features" className="text-gray-400 hover:text-white transition-colors">Features</a>
@@ -186,7 +179,7 @@ export default function LandingPage() {
           ) : (
             <button onClick={() => router.push('/auth/login')} className="text-sm text-gray-400 hover:text-white transition-colors">Sign In</button>
           )}
-          <button 
+          <button
             onClick={handleStartInterview}
             className="px-5 py-2 bg-white text-black text-sm font-bold rounded-full hover:bg-gray-200 transition-all shadow-lg"
           >
@@ -202,7 +195,7 @@ export default function LandingPage() {
             <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
             AI-Powered Interview Intelligence
           </div>
-          
+
           <h1 className="text-6xl md:text-8xl font-bold leading-[0.9] mb-8 animate-fade-in-up tracking-tight">
             Master your
             <br />
@@ -218,7 +211,7 @@ export default function LandingPage() {
           {/* HIGHLIGHTED CENTRAL CTA: RESUME UPLOAD */}
           <div className="relative group inline-block animate-fade-in-up mb-12" style={{ animationDelay: '0.3s' }}>
             <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-            <button 
+            <button
               onClick={handleUploadResumeClick}
               className="relative px-10 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black text-xl rounded-2xl transition-all hover:scale-105 flex items-center gap-4 shadow-2xl"
             >
@@ -226,13 +219,13 @@ export default function LandingPage() {
               {hasResume ? "Update Your Resume" : "Upload Resume to Personalize"}
             </button>
             <div className="mt-4 flex items-center gap-4 text-gray-500 text-[10px] font-bold uppercase tracking-widest ml-1">
-               <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> Instant Parsing</span>
-               <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> AI Question Gen</span>
+              <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> Instant Parsing</span>
+              <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> AI Question Gen</span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-4 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <button 
+            <button
               onClick={handleStartInterview}
               className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-100 transition-all"
             >
@@ -328,8 +321,14 @@ export default function LandingPage() {
                 {mlBars.map((bar, i) => (
                   <div key={i} className="flex items-center gap-4 animate-slide-in" style={{ animationDelay: `${i * 0.1}s`, opacity: 1 - (i * 0.08) }}>
                     <div className="w-2 h-2 bg-purple-400 rounded-full" />
-                    <div className="flex-1 h-8 bg-gradient-to-r from-purple-500/40 to-transparent rounded" style={{ width: `${bar.width}%` }} />
-                    <div className="text-xs text-gray-500 font-mono">{bar.value.toFixed(2)}</div>
+                    <div 
+                      className="flex-1 h-8 bg-gradient-to-r from-purple-500/40 to-transparent rounded" 
+                      style={{ width: `${bar.width}%` }} 
+                      suppressHydrationWarning
+                    />
+                    <div className="text-xs text-gray-500 font-mono" suppressHydrationWarning>
+                      {bar.value.toFixed(2)}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -340,11 +339,11 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="relative z-10 px-6 py-16 max-w-7xl mx-auto border-t border-white/10 text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex items-center justify-center font-bold text-[10px]">AI</div>
-            <span className="font-bold tracking-tight">InterviewAR</span>
-          </div>
-          <p className="text-sm text-gray-500">© 2026 InterviewAR Intelligence Systems. All rights reserved.</p>
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded flex items-center justify-center font-bold text-[10px]">AI</div>
+          <span className="font-bold tracking-tight">InterviewAR</span>
+        </div>
+        <p className="text-sm text-gray-500">© 2026 InterviewAR Intelligence Systems. All rights reserved.</p>
       </footer>
 
       {/* Modal Portal */}

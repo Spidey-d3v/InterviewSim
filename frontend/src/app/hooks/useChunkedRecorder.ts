@@ -33,8 +33,8 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
       setPermissionGranted(true);
       setPermissionError(null);
       return s;
-    } catch (err: any) {
-      const msg = `Permission error: ${err.message}`;
+    } catch (err: unknown) {
+      const msg = `Permission error: ${err instanceof Error ? err.message : 'Unknown error'}`;
       setPermissionError(msg);
       onError?.(msg);
       return null;

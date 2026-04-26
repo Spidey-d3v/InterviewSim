@@ -2,7 +2,7 @@
  * Utility Functions for Interview Metrics & Calculations
  */
 
-import { type ChunkResult, type GazeLogEntry } from '../hooks/useVisionSession';
+import { type ChunkResult, type GazeLogEntry } from '../app/hooks/useVisionSession';
 import { type GazeDistribution } from '../types/interview';
 
 /**
@@ -26,7 +26,7 @@ export const formatTime = (seconds: number): string => {
 /**
  * Formats a decimal score (0-1) into a percentage string
  */
-export const scoreCell = (v: number | null): string => 
+export const scoreCell = (v: number | null): string =>
   (v == null || !Number.isFinite(v) ? 'N/A' : `${(v * 100).toFixed(1)}%`);
 
 /**
@@ -69,8 +69,8 @@ export const getChunkGazeCounts = (chunk: ChunkResult): { focused: number; total
 
   const total = chunk.gaze_data.length;
   const focused = chunk.gaze_data.filter((e) => {
-      const s = (e.status || '').toLowerCase();
-      return !s.includes('away') && (s.includes('forward') || s.includes('left') || s.includes('right') || s.includes('down'));
+    const s = (e.status || '').toLowerCase();
+    return !s.includes('away') && (s.includes('forward') || s.includes('left') || s.includes('right') || s.includes('down'));
   }).length;
   return { focused, total };
 };

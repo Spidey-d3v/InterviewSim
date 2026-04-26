@@ -5,7 +5,7 @@
 - **Action:** Implemented Dynamic Interview Routing, PDF Transcript Mapping, and Engine Signal Correction.
 - **Details:**
     - Resolved `TS2345` compiler error in `VisionSessionControl.tsx` by updating the boolean `headless` parameter call to an empty string.
-    - Updated `frontend/src/app/front/homepage/page.tsx` to display a role selection modal, dynamically passing the user's selected Job Role as a `?role=` URL parameter.
+    - Updated `frontend/src/app//page.tsx` to display a role selection modal, dynamically passing the user's selected Job Role as a `?role=` URL parameter.
     - Intercepted LiveKit stream messaging inside `useConvFlowRoom.ts` and `InterviewRoom.tsx` to harvest STT outputs mapped beneath `turn_end` events structure, capturing Candidate Transcripts effectively without redundant API calls. 
     - Wired `publish_interview_end` routing inside `convFlow/main.py` explicitly carrying `node_s_evaluator`'s 3-pillar LLM technical scores & feedback.
     - Refactored frontend PDF rendering block to append captured `candidate_answer` blocks and AI evaluation metrics sequentially beneath each specific question boundary, visually grouped under Phase blocks.

@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@supabase/ssr": "github:supabase/ssr"
+    "@supabase/ssr": "github:supabase/ssr",
+    "framer-motion": "^12.38.0"
   }
 }

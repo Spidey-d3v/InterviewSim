@@ -71,9 +71,10 @@ export default function Signup() {
         alert("Account created successfully!");
         router.push("/auth/login");
       }
-    } catch (error: any) {
-      console.error("Signup failed:", error.message);
-      setErrorMsg(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Signup failed";
+      console.error("Signup failed:", message);
+      setErrorMsg(message);
     } finally {
       setIsLoading(false);
     }

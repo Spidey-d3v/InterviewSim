@@ -70,11 +70,6 @@ export interface SessionData {
   end_time: string;
 }
 
-interface SessionStatus {
-  is_running: boolean;
-  session_id?: string;
-}
-
 export function useVisionSession() {
   const [isConnected, setIsConnected] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -95,6 +90,7 @@ export function useVisionSession() {
   const [chunkErrors, setChunkErrors] = useState<string[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
+  const connectRef = useRef<() => void>(() => {});
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const reconnectAttemptsRef = useRef<number>(0);
   const MAX_RECONNECT_ATTEMPTS = 5;
@@ -286,7 +282,7 @@ export function useVisionSession() {
             `(attempt ${reconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})...`
           );
           reconnectAttemptsRef.current += 1;
-          reconnectTimeoutRef.current = setTimeout(() => connect(), delay);
+          reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), delay);
         } else {
           console.warn('[useVisionSession] Max reconnect attempts reached.');
           setError('Cannot connect to vision server. Please refresh the page.');
@@ -300,6 +296,10 @@ export function useVisionSession() {
       setError('Failed to connect to vision server');
     }
   }, [_clearChunkTimeout]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     reconnectAttemptsRef.current = MAX_RECONNECT_ATTEMPTS; // prevent auto-reconnect on explicit disconnect
@@ -385,12 +385,15 @@ export function useVisionSession() {
 
   // Auto-connect on mount
   useEffect(() => {
-    connect();
+    const timer = setTimeout(() => {
+      connectRef.current();
+    }, 0);
     
     return () => {
+      clearTimeout(timer);
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, [disconnect]);
 
   return {
     // Connection state

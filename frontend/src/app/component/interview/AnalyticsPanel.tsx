@@ -105,7 +105,15 @@ export default function AnalyticsPanel({
   );
 }
 
-function MetricSection({ label, value, percent, color, subtext }: any) {
+interface MetricSectionProps {
+  label: string;
+  value: string;
+  percent: number;
+  color: string;
+  subtext?: string;
+}
+
+function MetricSection({ label, value, percent, color, subtext }: MetricSectionProps) {
   return (
     <div className="p-4 rounded-lg bg-white/5 border border-white/10">
       <div className="flex justify-between items-center mb-2">

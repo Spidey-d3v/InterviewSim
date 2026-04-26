@@ -38,7 +38,6 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
-  const isRootRoute = pathname === '/'
   const isAuthRoute = pathname.startsWith('/auth')
   const isFrontRoute = pathname.startsWith('/front')
 

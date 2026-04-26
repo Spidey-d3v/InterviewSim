@@ -10,11 +10,22 @@
 import React, { useState } from 'react';
 import VisionSessionControl from '../component/VisionSessionControl';
 
+interface SessionLogEntry {
+  status: string;
+  timestamp: string;
+}
+
+interface VisionSessionData {
+  log_data: SessionLogEntry[];
+  start_time: string;
+  end_time: string;
+}
+
 export default function InterviewWithVisionTracking() {
-  const [sessionResults, setSessionResults] = useState<any>(null);
+  const [sessionResults, setSessionResults] = useState<VisionSessionData | null>(null);
   const [interviewStarted, setInterviewStarted] = useState(false);
 
-  const handleSessionEnd = (sessionData: any) => {
+  const handleSessionEnd = (sessionData: VisionSessionData) => {
     console.log('📊 Gaze tracking session ended:', sessionData);
     setSessionResults(sessionData);
     
@@ -60,7 +71,7 @@ export default function InterviewWithVisionTracking() {
                   <div className="text-6xl mb-4">🎥</div>
                   <p className="text-lg">Your camera feed will appear here</p>
                   <p className="text-sm text-gray-400 mt-2">
-                    {interviewStarted ? 'Interview in progress...' : 'Click "Start Interview" to begin'}
+                    {interviewStarted ? 'Interview in progress...' : 'Click Start Interview to begin'}
                   </p>
                 </div>
               </div>
@@ -89,7 +100,7 @@ export default function InterviewWithVisionTracking() {
                 <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
                   <p className="text-sm text-blue-600 mb-1">Current Question:</p>
                   <p className="text-gray-800 font-medium">
-                    "Tell me about a time you faced a challenging problem and how you solved it."
+                    &quot;Tell me about a time you faced a challenging problem and how you solved it.&quot;
                   </p>
                 </div>
               )}
@@ -116,7 +127,7 @@ export default function InterviewWithVisionTracking() {
                   📝 Instructions:
                 </p>
                 <ul className="text-xs text-yellow-700 space-y-1">
-                  <li>1. Click "Start Gaze Tracking"</li>
+                  <li>1. Click &quot;Start Gaze Tracking&quot;</li>
                   <li>2. Calibrate when window appears (press C)</li>
                   <li>3. Start your interview</li>
                   <li>4. Stop tracking when done</li>
@@ -132,7 +143,7 @@ export default function InterviewWithVisionTracking() {
                   </p>
                   <div className="text-xs text-green-700 space-y-1">
                     <div>Focus Score: <span className="font-bold">{
-                      ((sessionResults.log_data.filter((e: any) => 
+                      ((sessionResults.log_data.filter((e) =>
                         !e.status.includes('Away')
                       ).length / sessionResults.log_data.length) * 100).toFixed(1)
                     }%</span></div>

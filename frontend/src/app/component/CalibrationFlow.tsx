@@ -64,7 +64,7 @@ export default function CalibrationFlow({
               </h2>
               
               <p className="text-lg text-gray-300">
-                We'll calibrate the eye tracking system to ensure accurate monitoring during your interview.
+                We&apos;ll calibrate the eye tracking system to ensure accurate monitoring during your interview.
               </p>
 
               <div className="bg-white/5 border border-white/10 rounded-xl p-6 text-left space-y-3">
@@ -144,7 +144,7 @@ export default function CalibrationFlow({
                   onClick={handleNext}
                   className="flex-1 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-semibold rounded-xl transition-all"
                 >
-                  I'm Ready
+                  I&apos;m Ready
                 </button>
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function CalibrationFlow({
               </h2>
               
               <p className="text-lg text-gray-300">
-                Eye tracking is calibrated and ready. Clicking "Start Interview" will enter fullscreen mode for an immersive experience.
+                Eye tracking is calibrated and ready. Clicking &quot;Start Interview&quot; will enter fullscreen mode for an immersive experience.
               </p>
 
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 mb-2">
@@ -198,7 +198,7 @@ export default function CalibrationFlow({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <p className="text-sm text-blue-300">
-                    The interview will automatically enter fullscreen mode. Press ESC or click "Exit Fullscreen" to exit at any time.
+                    The interview will automatically enter fullscreen mode. Press ESC or click &quot;Exit Fullscreen&quot; to exit at any time.
                   </p>
                 </div>
               </div>

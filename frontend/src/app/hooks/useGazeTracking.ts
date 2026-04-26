@@ -45,7 +45,7 @@ export const useGazeTracking = (
   const sendIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const frameCountRef = useRef(0);
-  const lastFpsUpdateRef = useRef(Date.now());
+  const lastFpsUpdateRef = useRef(0);
 
   // Connect to WebSocket server
   const connect = useCallback(() => {
@@ -59,6 +59,8 @@ export const useGazeTracking = (
 
     ws.onopen = () => {
       console.log('✅ [Gaze] Connected to Vision Server');
+      lastFpsUpdateRef.current = Date.now();
+      frameCountRef.current = 0;
       setConnected(true);
     };
 
@@ -106,14 +108,6 @@ export const useGazeTracking = (
     wsRef.current = ws;
   }, [serverUrl]);
 
-  // Disconnect from server
-  const disconnect = useCallback(() => {
-    stopTracking();
-    wsRef.current?.close();
-    wsRef.current = null;
-    setConnected(false);
-  }, []);
-
   // Start sending frames from video element
   const startTracking = useCallback((videoElement: HTMLVideoElement) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -127,6 +121,8 @@ export const useGazeTracking = (
     }
 
     videoRef.current = videoElement;
+    lastFpsUpdateRef.current = Date.now();
+    frameCountRef.current = 0;
     setIsTracking(true);
 
     // Send frames at 30 FPS
@@ -171,6 +167,14 @@ export const useGazeTracking = (
     setIsTracking(false);
     console.log('📹 [Gaze] Stopped tracking');
   }, []);
+
+  // Disconnect from server
+  const disconnect = useCallback(() => {
+    stopTracking();
+    wsRef.current?.close();
+    wsRef.current = null;
+    setConnected(false);
+  }, [stopTracking]);
 
   // Send command to server
   const sendCommand = useCallback((action: string) => {

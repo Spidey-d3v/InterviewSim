@@ -14,7 +14,6 @@ interface HeaderProps {
   visionConnected: boolean;
   visionError: string | null;
   permissionStatus: string;
-  permissionError: string | null;
   isPaused: boolean;
   onExitFullscreen: () => void;
   onEnterFullscreen: () => void;
@@ -32,7 +31,6 @@ export function InterviewHeader({
   visionConnected,
   visionError,
   permissionStatus,
-  permissionError,
   isPaused,
   onExitFullscreen,
   onEnterFullscreen,

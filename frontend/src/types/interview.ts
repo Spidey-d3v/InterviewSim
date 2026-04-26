@@ -2,8 +2,6 @@
  * Shared Type Definitions for the Interview Experience
  */
 
-import { type ChunkResult, type GazeLogEntry } from '../hooks/useVisionSession';
-
 export type GazeDistribution = {
   forward: number;
   left: number;
@@ -28,7 +26,7 @@ export type PersistedQuestionMetric = {
   question_text: string;
   candidate_answer?: string;
   phase?: string;
-  chunks: any[];
+  chunks: PersistedChunkMetric[];
   question_averages: {
     confidence_score: number | null;
     facial_expression_score: number | null;

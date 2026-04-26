@@ -109,7 +109,7 @@ export default function ProfilePage() {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.push('/front/homepage')}
+            onClick={() => router.push('/')}
             className="px-4 py-2 border border-gray-700 text-sm rounded-lg hover:border-gray-500 transition-colors"
           >
             Back to Home

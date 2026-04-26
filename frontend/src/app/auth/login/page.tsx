@@ -42,8 +42,9 @@ export default function Login() {
         document.cookie = `app_session_expires_at=${expiresAt}; Path=/; SameSite=Lax`;
         router.push("/");
       }
-    } catch (error: any) {
-      console.error("Login failed:", error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("Login failed:", message);
       setErrorMsg("Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
@@ -163,7 +164,7 @@ export default function Login() {
           </div>
 
           <p className="text-center text-sm text-gray-400">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <button
               onClick={() => router.push('/auth/signup')}
               className="text-purple-400 hover:text-purple-300 font-semibold transition-colors bg-none border-none cursor-pointer"

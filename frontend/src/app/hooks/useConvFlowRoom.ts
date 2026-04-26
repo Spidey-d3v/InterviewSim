@@ -9,10 +9,19 @@ import {
 const CONVFLOW_BACKEND = "http://localhost:8001";
 const LIVEKIT_URL = "ws://localhost:7880";
 
+interface NewQuestionMeta {
+  phase?: string;
+  stream_id?: string;
+  is_final?: boolean;
+  question_text?: string;
+  text?: string;
+  [key: string]: unknown;
+}
+
 interface UseConvFlowRoomOptions {
   onTurnEnd: (transcript?: string) => void;
-  onInterviewEnd?: (scores: any) => void;
-  onNewQuestion?: (text: string, meta?: any) => void;
+  onInterviewEnd?: (scores: Record<string, unknown>) => void;
+  onNewQuestion?: (text: string, meta?: NewQuestionMeta) => void;
   stream: MediaStream | null;
   isAiSpeaking?: boolean;
 }
@@ -67,27 +76,41 @@ export function useConvFlowRoom({
 
     room.on(RoomEvent.DataReceived, (payload: Uint8Array) => {
       try {
-        const msg = JSON.parse(new TextDecoder().decode(payload));
+        const parsed: unknown = JSON.parse(new TextDecoder().decode(payload));
+        if (!parsed || typeof parsed !== 'object') return;
+        const msg = parsed as Record<string, unknown>;
+        const event = typeof msg.event === 'string' ? msg.event : '';
         
-        if (msg.event === "turn_end") {
+        if (event === "turn_end") {
           console.log("📡 turn_end received — triggering video flush");
-          onTurnEndRef.current(msg.transcript);
+          onTurnEndRef.current(typeof msg.transcript === 'string' ? msg.transcript : undefined);
         }
 
-        if (msg.event === "interview_end") {
+        if (event === "interview_end") {
           console.log("🏁 Interview over! Received final scores:", msg.final_scores);
           if (onInterviewEndRef.current) {
-            onInterviewEndRef.current(msg.final_scores);
+            const scores = msg.final_scores && typeof msg.final_scores === 'object'
+              ? (msg.final_scores as Record<string, unknown>)
+              : {};
+            onInterviewEndRef.current(scores);
           }
         }
 
-        if (msg.event === "new_question") {
+        if (event === "new_question") {
           if (onNewQuestionRef.current) {
             // Backend sends 'question_text', not 'text'
-            onNewQuestionRef.current(msg.question_text || msg.text, msg);
+            const questionText =
+              typeof msg.question_text === 'string'
+                ? msg.question_text
+                : typeof msg.text === 'string'
+                  ? msg.text
+                  : '';
+            onNewQuestionRef.current(questionText, msg as NewQuestionMeta);
           }
         }
-      } catch (e) { /* ignore */ }
+      } catch {
+        // Ignore malformed payloads.
+      }
     });
 
     async function connect() {
@@ -125,7 +148,7 @@ export function useConvFlowRoom({
     }
   }, []);
 
-  const sendData = useCallback(async (data: any) => {
+  const sendData = useCallback(async (data: Record<string, unknown>) => {
     if (roomRef.current && roomRef.current.localParticipant) {
       const payload = new TextEncoder().encode(JSON.stringify(data));
       await roomRef.current.localParticipant.publishData(payload, { reliable: true });

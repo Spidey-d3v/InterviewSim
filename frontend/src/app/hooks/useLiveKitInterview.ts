@@ -26,6 +26,7 @@ interface LiveKitInterviewState {
 
 export function useLiveKitInterview() {
   const roomRef = useRef<Room | null>(null);
+  const connectRef = useRef<(params: ConnectParams, retries?: number) => Promise<void>>(async () => {});
 
   const [state, setState] = useState<LiveKitInterviewState>({
     room: null,
@@ -165,7 +166,7 @@ export function useLiveKitInterview() {
         const delay = Math.pow(2, 4 - retries) * 1000; // 2s, 4s, 8s
         console.log('[LiveKit] Retrying in', delay, 'ms...');
         setTimeout(() => {
-          connect(params, retries - 1);
+          void connectRef.current(params, retries - 1);
         }, delay);
         return;
       }
@@ -180,6 +181,10 @@ export function useLiveKitInterview() {
       }));
     }
   }, [_syncConnection, _syncParticipants]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     return () => {

@@ -7,11 +7,11 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useVisionSession } from '../hooks/useVisionSession';
+import React, { useEffect } from 'react';
+import { useVisionSession, type SessionData } from '../hooks/useVisionSession';
 
 interface VisionSessionControlProps {
-  onSessionEnd?: (logData: any) => void;
+  onSessionEnd?: (logData: SessionData) => void;
   autoStart?: boolean;
   headless?: boolean;  // true = no windows (default), false = show minimized windows
 }
@@ -21,6 +21,8 @@ export default function VisionSessionControl({
   autoStart = false,
   headless = true  // Default to headless mode (no OpenCV windows)
 }: VisionSessionControlProps) {
+  void headless;
+
   const {
     isConnected,
     error,
@@ -32,17 +34,14 @@ export default function VisionSessionControl({
     reconnect,
   } = useVisionSession();
 
-  const [showResults, setShowResults] = useState(false);
+  const showResults = Boolean(sessionData && !isSessionActive);
 
   // Callback when session ends
   useEffect(() => {
-    if (sessionData && !isSessionActive) {
-      setShowResults(true);
-      if (onSessionEnd) {
-        onSessionEnd(sessionData);
-      }
+    if (showResults && sessionData && onSessionEnd) {
+      onSessionEnd(sessionData);
     }
-  }, [sessionData, isSessionActive, onSessionEnd]);
+  }, [showResults, sessionData, onSessionEnd]);
 
   // Auto-start if enabled
   useEffect(() => {
@@ -52,7 +51,6 @@ export default function VisionSessionControl({
   }, [autoStart, isConnected, isSessionActive, startSession]);
 
   const handleStartSession = () => {
-    setShowResults(false);
     startSession("");
   };
 

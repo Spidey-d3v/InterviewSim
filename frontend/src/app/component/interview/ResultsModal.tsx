@@ -4,14 +4,14 @@ import React, { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { type ChunkResult } from '../../hooks/useVisionSession';
-import { 
-  type PersistedQuestionMetric, 
-  type InterviewPhaseScores 
+import {
+  type PersistedQuestionMetric,
+  type InterviewPhaseScores
 } from '../../../types/interview';
-import { 
-  mean, 
-  scoreCell, 
-  getChunkGazeCounts 
+import {
+  mean,
+  scoreCell,
+  getChunkGazeCounts
 } from '../../../utils/interview-metrics';
 
 interface ResultsModalProps {
@@ -141,28 +141,28 @@ export default function ResultsModal({
         ensureSpace(lineHeight * 3);
         const phaseName = phase.toUpperCase().replace('_', ' ');
         const pScores = finalScores && finalScores[phase] ? finalScores[phase] : null;
-        
+
         addWrappedText(`--- PHASE: ${phaseName} ---`, { bold: true, size: 12, bottomGap: 4 });
         if (pScores) {
-           if (pScores.metrics) {
-             const metricsText = Object.entries(pScores.metrics)
-               .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1).replace('_', ' ')}: ${v || 0}`)
-               .join(' | ');
-             addWrappedText(metricsText, { size: 10, bottomGap: 4 });
-           }
-           
-           if (pScores.advice && pScores.advice.length > 0) {
-             addWrappedText(`AI Advice:`, { bold: true, size: 10 });
-             pScores.advice.forEach((adv: string) => addWrappedText(`• ${adv}`, { size: 9 }));
-             addWrappedText(` `, { bottomGap: 4 });
-           }
+          if (pScores.metrics) {
+            const metricsText = Object.entries(pScores.metrics)
+              .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1).replace('_', ' ')}: ${v || 0}`)
+              .join(' | ');
+            addWrappedText(metricsText, { size: 10, bottomGap: 4 });
+          }
+
+          if (pScores.advice && pScores.advice.length > 0) {
+            addWrappedText(`AI Advice:`, { bold: true, size: 10 });
+            pScores.advice.forEach((adv: string) => addWrappedText(`• ${adv}`, { size: 9 }));
+            addWrappedText(` `, { bottomGap: 4 });
+          }
         }
 
         phaseQs.forEach((q) => {
           ensureSpace(lineHeight * 6);
           addWrappedText(`Q. ${q.question_text}`, { bold: true });
           if (q.candidate_answer) {
-             addWrappedText(`Candidate: "${q.candidate_answer.length > 300 ? q.candidate_answer.substring(0, 300) + '...' : q.candidate_answer}"`, { size: 10, bottomGap: 2 });
+            addWrappedText(`Candidate: "${q.candidate_answer.length > 300 ? q.candidate_answer.substring(0, 300) + '...' : q.candidate_answer}"`, { size: 10, bottomGap: 2 });
           }
           addWrappedText(`Confidence: ${scoreCell(q.question_averages.confidence_score)}`);
           addWrappedText(`Voice: ${scoreCell(q.question_averages.voice_score)}`);
@@ -174,7 +174,7 @@ export default function ResultsModal({
 
     addWrappedText('Generated from actual session data only (no synthetic placeholders).', { size: 10 });
     pdf.save(`interview-report-${interviewSessionId ?? Date.now()}.pdf`);
-  }, [chunkResults, questionMetrics, finalScores, interviewSessionId, interviewStartedAt, currentUserId, recordingTime]);
+  }, [chunkResults, questionMetrics, finalScores, interviewSessionId, interviewStartedAt, currentUserId, recordingTime, focusPct]);
 
   if (!show) return null;
 
@@ -233,7 +233,7 @@ export default function ResultsModal({
               const saved = await onPersist();
               if (saved || confirm('Could not save to database. Leave anyway?')) {
                 onClose();
-                router.push('/front/homepage');
+                router.push('/');
               }
             }}
             className="flex-1 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
@@ -254,7 +254,7 @@ export default function ResultsModal({
 }
 
 function StatCard({ label, value, color }: { label: string; value: string; color: string }) {
-  const colors: any = {
+  const colors: Record<string, string> = {
     blue: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400',
     emerald: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400',
     purple: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-400',
@@ -269,6 +269,6 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 }
 
 function MetricSpan({ label, val, color }: { label: string; val?: number | null; color: string }) {
-  const colors: any = { emerald: 'text-emerald-400', purple: 'text-purple-400', green: 'text-green-400' };
+  const colors: Record<string, string> = { emerald: 'text-emerald-400', purple: 'text-purple-400', green: 'text-green-400' };
   return val != null ? <span className={colors[color]}>{label}: {(val * 100).toFixed(0)}%</span> : null;
 }

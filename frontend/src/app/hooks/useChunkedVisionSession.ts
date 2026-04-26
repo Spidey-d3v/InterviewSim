@@ -59,7 +59,6 @@ export function useChunkedVisionSession(videoRef: React.RefObject<HTMLVideoEleme
   const streamRef = useRef<MediaStream | null>(null);
   const chunkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionIdRef = useRef<string | null>(null); // stable ref for callbacks
-  const chunksQueue = useRef<Blob[]>([]);
   const isStoppingRef = useRef(false);
 
   // ── Attach webcam stream to video element ────────────────────────────────

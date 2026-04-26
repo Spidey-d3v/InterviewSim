@@ -72,9 +72,10 @@ export default function ResumeUploadModal({ onClose, onUploadSuccess }: ResumeUp
       setStatus('success');
       setTimeout(() => onClose(), 1500);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Upload failed';
       console.error("Upload error:", error);
-      alert(error.message);
+      alert(message);
       setStatus('idle');
     }
   };
@@ -89,7 +90,7 @@ export default function ResumeUploadModal({ onClose, onUploadSuccess }: ResumeUp
           <X size={20} />
         </button>
         <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '0.5rem', color: 'white' }}>Upload Resume</h2>
-        <p style={{ color: '#9ca3af', fontSize: '0.875rem', marginBottom: '1.5rem' }}>We'll use this to personalize your AI interview experience.</p>
+        <p style={{ color: '#9ca3af', fontSize: '0.875rem', marginBottom: '1.5rem' }}>We&apos;ll use this to personalize your AI interview experience.</p>
         <div onClick={() => document.getElementById('fileInput')?.click()} style={{ border: '2px dashed #374151', borderRadius: '0.75rem', padding: '2rem', textAlign: 'center', marginBottom: '1.5rem', cursor: 'pointer' }}>
           <UploadCloud size={32} style={{ margin: '0 auto 0.75rem', color: '#6b7280' }} />
           <p style={{ color: 'white', fontWeight: '500', marginBottom: '0.25rem' }}>Click to browse or drag and drop</p>

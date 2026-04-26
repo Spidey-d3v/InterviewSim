@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase';
 
 // Hooks
-import { useVisionSession, type PredictionEntry } from '../hooks/useVisionSession';
+import { useVisionSession } from '../hooks/useVisionSession';
 import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
 import { useConvFlowRoom } from '../hooks/useConvFlowRoom';
 
@@ -23,6 +23,12 @@ import {
 } from '../../types/interview';
 import { formatTime, mean, buildChunkGazeDistribution } from '../../utils/interview-metrics';
 
+interface QuestionMeta {
+  phase?: string;
+  stream_id?: string;
+  is_final?: boolean;
+}
+
 /**
  * InterviewRoom Component
  * 
@@ -31,8 +37,6 @@ import { formatTime, mean, buildChunkGazeDistribution } from '../../utils/interv
  */
 export default function InterviewRoom() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const role = searchParams.get('role');
 
   // -- Refs for persistent state without re-renders --
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -57,7 +61,7 @@ export default function InterviewRoom() {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questionStatus, setQuestionStatus] = useState<QuestionStatus>('waiting');
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
-  const [activeQuestionStreamId, setActiveQuestionStreamId] = useState<string | null>(null);
+  const [, setActiveQuestionStreamId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<string>('intro');
 
   // -- Session/Persistence State --
@@ -87,7 +91,6 @@ export default function InterviewRoom() {
     isRecording: isChunkRecording,
     chunkCount,
     pendingUploads,
-    permissionGranted,
     requestPermissions,
     start: startRecorder,
     stop: stopRecorder,
@@ -107,7 +110,7 @@ export default function InterviewRoom() {
   });
 
   // -- Callbacks for Child Components --
-  const handleNewQuestion = useCallback((questionText: string, meta?: any) => {
+  const handleNewQuestion = useCallback((questionText: string, meta?: QuestionMeta) => {
     // The backend sends 'question_text' in the payload, but onNewQuestion 
     // is called with (msg.question_text || msg.text).
     const normalized = questionText?.trim();
@@ -142,36 +145,7 @@ export default function InterviewRoom() {
     }
   }, [flushChunk, interviewStarted]);
 
-  const handlePersistSession = useCallback(async (): Promise<boolean> => {
-    if (persistingSession || sessionPersisted || !interviewSessionId || !currentUserId) return false;
-    setPersistingSession(true);
-    setSessionPersistError(null);
-
-    try {
-      const metrics = buildQuestionMetrics();
-      const res = await fetch('http://localhost:8001/api/interview-sessions/finalize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: interviewSessionId,
-          user_id: currentUserId,
-          started_at: interviewStartedAt,
-          completed_at: new Date().toISOString(),
-          question_metrics_json: metrics,
-        }),
-      });
-      if (!res.ok) throw new Error('Database save failed');
-      setSessionPersisted(true);
-      return true;
-    } catch (err: any) {
-      setSessionPersistError(err.message);
-      return false;
-    } finally {
-      setPersistingSession(false);
-    }
-  }, [chunkResults, currentUserId, interviewSessionId, interviewStartedAt]);
-
-  const buildQuestionMetrics = (): PersistedQuestionMetric[] => {
+  const buildQuestionMetrics = useCallback((): PersistedQuestionMetric[] => {
     const grouped = new Map<number, PersistedQuestionMetric>();
 
     // 1. Group chunks by their corresponding question
@@ -219,7 +193,37 @@ export default function InterviewRoom() {
     });
 
     return metrics;
-  };
+  }, [chunkResults]);
+
+  const handlePersistSession = useCallback(async (): Promise<boolean> => {
+    if (persistingSession || sessionPersisted || !interviewSessionId || !currentUserId) return false;
+    setPersistingSession(true);
+    setSessionPersistError(null);
+
+    try {
+      const metrics = buildQuestionMetrics();
+      const res = await fetch('http://localhost:8001/api/interview-sessions/finalize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: interviewSessionId,
+          user_id: currentUserId,
+          started_at: interviewStartedAt,
+          completed_at: new Date().toISOString(),
+          question_metrics_json: metrics,
+        }),
+      });
+      if (!res.ok) throw new Error('Database save failed');
+      setSessionPersisted(true);
+      return true;
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error while saving session';
+      setSessionPersistError(message);
+      return false;
+    } finally {
+      setPersistingSession(false);
+    }
+  }, [buildQuestionMetrics, currentUserId, interviewSessionId, interviewStartedAt, persistingSession, sessionPersisted]);
 
   const handleLeave = async () => {
     if (endingInterviewRef.current) return;
@@ -237,10 +241,10 @@ export default function InterviewRoom() {
     }
   };
 
-  const handleInterviewEnd = useCallback((fScores?: any) => {
+  const handleInterviewEnd = (fScores?: Record<string, InterviewPhaseScores>) => {
     if (fScores) setFinalScores(fScores);
     void handleLeave();
-  }, [handleLeave]);
+  };
 
   // -- Lifecycle Effects --
   useEffect(() => {
@@ -253,7 +257,7 @@ export default function InterviewRoom() {
     const fsHandler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', fsHandler);
     return () => { releaseStream(); document.removeEventListener('fullscreenchange', fsHandler); };
-  }, []);
+  }, [releaseStream, requestPermissions]);
 
   useEffect(() => {
     const text = (streamingQuestion ?? aiQuestions[questionIndex] ?? 'Introduce yourself.').trim();
@@ -310,7 +314,7 @@ export default function InterviewRoom() {
         isChunkRecording={isChunkRecording} chunkCount={chunkCount} recordingTime={recordingTime}
         pendingChunks={pendingChunks} isFullscreen={isFullscreen} interviewStarted={interviewStarted}
         visionConnected={visionConnected} visionError={visionError}
-        permissionStatus={permissionStatus} permissionError={null}
+        permissionStatus={permissionStatus}
         isPaused={isPaused}
         onExitFullscreen={() => document.exitFullscreen()}
         onEnterFullscreen={() => containerRef.current?.requestFullscreen()}
