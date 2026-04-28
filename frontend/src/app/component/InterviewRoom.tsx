@@ -35,6 +35,8 @@ interface QuestionMeta {
  * The main orchestration layer for the AI interview experience.
  * It manages the camera stream, voice connection, and behavioral analysis.
  */
+import { getLiveKitToken, clearLiveKitToken } from '../../utils/livekitToken';
+
 export default function InterviewRoom() {
   const router = useRouter();
 
@@ -169,9 +171,9 @@ export default function InterviewRoom() {
         chunk_index: chunk.chunkIndex,
         question_index: qCtx.question_index,
         question_text: qCtx.question_text,
-        confidence_score: chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null,
-        facial_expression_score: chunk.facial_analysis?.score,
-        voice_score: chunk.voice_analysis?.score,
+        confidence_score: (chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null) ?? null,
+        facial_expression_score: chunk.facial_analysis?.score ?? null,
+        voice_score: chunk.voice_analysis?.score ?? null,
         gaze_distribution: buildChunkGazeDistribution(chunk),
       };
 
@@ -211,6 +213,7 @@ export default function InterviewRoom() {
           started_at: interviewStartedAt,
           completed_at: new Date().toISOString(),
           question_metrics_json: metrics,
+          llm_evaluation_json: finalScores,
         }),
       });
       if (!res.ok) throw new Error('Database save failed');
@@ -232,22 +235,29 @@ export default function InterviewRoom() {
     // Phase 1 Fix: Stop everything immediately
     disconnectRoom();
     releaseStream();
+    clearLiveKitToken(); // Clears cached token so next interview creates a new room
 
     if (document.fullscreenElement) await document.exitFullscreen();
     if (isChunkRecording) stopRecorder();
-    if (interviewStarted) setShowResults(true);
-    else {
+    if (interviewStarted) {
+      setShowResults(true);
+    } else {
       router.push('/');
     }
   };
 
-  const handleInterviewEnd = (fScores?: Record<string, InterviewPhaseScores>) => {
-    if (fScores) setFinalScores(fScores);
+  const handleInterviewEnd = (fScores?: Record<string, unknown>) => {
+    if (fScores) setFinalScores(fScores as Record<string, InterviewPhaseScores>);
     void handleLeave();
   };
 
   // -- Lifecycle Effects --
   useEffect(() => {
+    // When the component mounts (or re-mounts on a fresh page load), we should
+    // conditionally clear the token if we want to ensure fresh rooms on refresh.
+    // Setting endingInterviewRef to false just in case.
+    endingInterviewRef.current = false;
+
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
     requestPermissions().then((s) => {

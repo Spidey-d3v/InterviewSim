@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 const VISION_SERVER = "http://localhost:8000";
 const MIME_TYPE = "video/webm;codecs=vp8,opus";
@@ -21,6 +21,13 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunkIndexRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
+  const onChunkReadyRef = useRef(onChunkReady);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onChunkReadyRef.current = onChunkReady;
+    onErrorRef.current = onError;
+  }, [onChunkReady, onError]);
 
   const requestPermissions = useCallback(async (): Promise<MediaStream | null> => {
     try {
@@ -36,10 +43,10 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
     } catch (err: unknown) {
       const msg = `Permission error: ${err instanceof Error ? err.message : 'Unknown error'}`;
       setPermissionError(msg);
-      onError?.(msg);
+      onErrorRef.current?.(msg);
       return null;
     }
-  }, [onError]);
+  }, []);
 
   const startOneRecorder = useCallback((s: MediaStream) => {
     const recorder = new MediaRecorder(s, { mimeType: MIME_TYPE });
@@ -65,16 +72,16 @@ export function useChunkedRecorder({ onChunkReady, onError }: ChunkedRecorderOpt
         const data = await res.json();
         console.log("✅ Vision server received chunk at:", data.video_path);
         setPendingUploads((p) => p - 1);
-        onChunkReady(data.video_path, `turn_${idx}`, idx);
+        onChunkReadyRef.current(data.video_path, `turn_${idx}`, idx);
       } catch (err) {
         console.error("❌ Vision server upload failed:", err);
         setPendingUploads((p) => p - 1);
-        onError?.(`Upload failed: ${err}`);
+        onErrorRef.current?.(`Upload failed: ${err}`);
       }
     };
 
     recorder.start();
-  }, [onChunkReady, onError]);
+  }, []);
 
   const startRecording = useCallback((mediaStream?: MediaStream) => {
     const s = mediaStream || streamRef.current;

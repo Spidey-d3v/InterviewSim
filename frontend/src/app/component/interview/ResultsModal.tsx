@@ -4,14 +4,14 @@ import React, { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
 import { type ChunkResult } from '../../hooks/useVisionSession';
-import {
-  type PersistedQuestionMetric,
-  type InterviewPhaseScores
+import { 
+  type PersistedQuestionMetric, 
+  type InterviewPhaseScores 
 } from '../../../types/interview';
-import {
-  mean,
-  scoreCell,
-  getChunkGazeCounts
+import { 
+  mean, 
+  scoreCell, 
+  getChunkGazeCounts 
 } from '../../../utils/interview-metrics';
 
 interface ResultsModalProps {
@@ -51,79 +51,103 @@ export default function ResultsModal({
 }: ResultsModalProps) {
   const router = useRouter();
 
-  // Calculate overall gaze stats for both UI and PDF
-  const totalGazeStats = chunkResults.reduce((acc, c) => {
-    const counts = getChunkGazeCounts(c);
-    return { focused: acc.focused + counts.focused, total: acc.total + counts.total };
-  }, { focused: 0, total: 0 });
-
-  const focusPct = totalGazeStats.total > 0 ? (totalGazeStats.focused / totalGazeStats.total) * 100 : 0;
-
   const exportInterviewReport = useCallback(async () => {
-    const voiceVals = chunkResults
-      .map((c) => c.voice_analysis?.score)
-      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-    const facialVals = chunkResults
-      .map((c) => c.facial_analysis?.score)
-      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-    const confVals = chunkResults
-      .flatMap((c) => c.predictions.map((p) => p.confidence))
-      .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-
-    const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((s, v) => s + v, 0) / voiceVals.length) * 100 : null;
-    const avgFacial = facialVals.length > 0 ? (facialVals.reduce((s, v) => s + v, 0) / facialVals.length) * 100 : null;
-    const avgConfidence = confVals.length > 0 ? (confVals.reduce((s, v) => s + v, 0) / confVals.length) * 100 : null;
-
-    const overallRaw = [focusPct, avgConfidence, avgVoice, avgFacial].filter(
-      (v): v is number => typeof v === 'number' && Number.isFinite(v)
-    );
-    const overall = overallRaw.length > 0 ? overallRaw.reduce((s, v) => s + v, 0) / overallRaw.length : 0;
-
-    const started = interviewStartedAt ? new Date(interviewStartedAt) : null;
-    const ended = new Date();
-    const durationSeconds = started ? Math.max(0, Math.round((ended.getTime() - started.getTime()) / 1000)) : recordingTime;
-
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const margin = 40;
-    const lineHeight = 16;
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const contentWidth = pageWidth - margin * 2;
     let y = margin;
 
-    const ensureSpace = (requiredHeight = lineHeight) => {
-      if (y + requiredHeight <= pageHeight - margin) return;
-      pdf.addPage();
-      y = margin;
+    // --- Dossier Palette ---
+    const COLORS = {
+      INDIGO: [99, 102, 241],
+      PINK: [236, 72, 153],
+      GOLD: [234, 179, 8],
+      BG_GREY: [249, 250, 251],
+      TEXT_DARK: [17, 24, 39],
+      TEXT_LIGHT: [107, 114, 128],
+      BORDER: [229, 231, 235]
     };
 
-    const addWrappedText = (text: string, options?: { bold?: boolean; size?: number; bottomGap?: number }) => {
-      pdf.setFont('helvetica', options?.bold ? 'bold' : 'normal');
-      pdf.setFontSize(options?.size ?? 11);
-      const lines = pdf.splitTextToSize(text, contentWidth) as string[];
-      lines.forEach((line) => {
-        ensureSpace();
-        pdf.text(line, margin, y);
-        y += lineHeight;
-      });
-      if (options?.bottomGap) y += options.bottomGap;
+    const drawHeader = () => {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(24);
+      pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      pdf.text('Performance Evaluation Dossier', margin, y + 20);
+      
+      const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      pdf.setFontSize(9);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(COLORS.TEXT_LIGHT[0], COLORS.TEXT_LIGHT[1], COLORS.TEXT_LIGHT[2]);
+      pdf.text(`SESSION PROTOCOL: ${(interviewSessionId || 'N/A').toUpperCase()} • GENERATED ON ${dateStr}`, margin, y + 35);
+      
+      y += 45;
+      pdf.setDrawColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+      pdf.setLineWidth(2);
+      pdf.line(margin, y, margin + 120, y);
+      y += 35;
     };
 
-    addWrappedText('InterviewAR Report', { bold: true, size: 18, bottomGap: 6 });
-    addWrappedText(`Session: ${interviewSessionId ?? 'N/A'}`);
-    addWrappedText(`User: ${currentUserId ?? 'N/A'}`);
-    addWrappedText(`Started: ${started ? started.toISOString() : 'N/A'}`);
-    addWrappedText(`Completed: ${ended.toISOString()}`);
-    addWrappedText(`Duration: ${durationSeconds}s`, { bottomGap: 8 });
+    const ensureSpace = (required: number) => {
+      if (y + required > pageHeight - margin) {
+        pdf.addPage();
+        y = margin;
+        return true;
+      }
+      return false;
+    };
 
-    addWrappedText('Summary Scores', { bold: true, size: 14, bottomGap: 4 });
-    addWrappedText(`Focus Score: ${focusPct.toFixed(1)}%`);
-    addWrappedText(`Average Confidence: ${avgConfidence == null ? 'N/A' : `${avgConfidence.toFixed(1)}%`}`);
-    addWrappedText(`Voice Skills: ${avgVoice == null ? 'N/A' : `${avgVoice.toFixed(1)}%`}`);
-    addWrappedText(`Facial Expression: ${avgFacial == null ? 'N/A' : `${avgFacial.toFixed(1)}%`}`);
-    addWrappedText(`Overall Score: ${overall.toFixed(1)}%`);
-    addWrappedText(`Total Chunks: ${chunkResults.length}`);
-    addWrappedText(`Total Questions: ${questionMetrics.length}`, { bottomGap: 8 });
+    // 1. Calculations
+    const allGaze = chunkResults.flatMap((c) => c.gaze_data);
+    const totalGaze = allGaze.length;
+    const focusedGaze = allGaze.filter((e) => {
+      const s = (e.status || '').toLowerCase();
+      return !s.includes('away') && (s.includes('forward') || s.includes('left') || s.includes('right') || s.includes('down'));
+    }).length;
+    const focusPct = totalGaze > 0 ? (focusedGaze / totalGaze) * 100 : 0;
+
+    const voiceVals = chunkResults.map(c => c.voice_analysis?.score).filter((v): v is number => typeof v === 'number');
+    const facialVals = chunkResults.map(c => c.facial_analysis?.score).filter((v): v is number => typeof v === 'number');
+    const confVals = chunkResults.flatMap(c => c.predictions.map(p => p.confidence)).filter((v): v is number => typeof v === 'number');
+
+    const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((a, b) => a + b, 0) / voiceVals.length) * 100 : 0;
+    const avgFacial = facialVals.length > 0 ? (facialVals.reduce((a, b) => a + b, 0) / facialVals.length) * 100 : 0;
+    const avgConf = confVals.length > 0 ? (confVals.reduce((a, b) => a + b, 0) / confVals.length) * 100 : 0;
+
+    // 2. Render Header
+    drawHeader();
+
+    // 3. Summary Cards
+    const cardWidth = (contentWidth - 20) / 3;
+    const cardHeight = 60;
+    
+    [
+      { label: 'CONFIDENCE', val: `${Math.round(avgConf)}%` },
+      { label: 'COMMUNICATION', val: `${Math.round(avgVoice)}%` },
+      { label: 'NON-VERBAL', val: `${Math.round(avgFacial)}%` }
+    ].forEach((card, i) => {
+      const x = margin + i * (cardWidth + 10);
+      pdf.setFillColor(COLORS.BG_GREY[0], COLORS.BG_GREY[1], COLORS.BG_GREY[2]);
+      pdf.rect(x, y, cardWidth, cardHeight, 'F');
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(18);
+      pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+      pdf.text(card.val, x + cardWidth/2, y + 30, { align: 'center' });
+      
+      pdf.setFontSize(7);
+      pdf.setTextColor(COLORS.TEXT_LIGHT[0], COLORS.TEXT_LIGHT[1], COLORS.TEXT_LIGHT[2]);
+      pdf.text(card.label, x + cardWidth/2, y + 45, { align: 'center' });
+    });
+    y += cardHeight + 40;
+
+    // 4. Phase Analysis
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(14);
+    pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+    pdf.text('PHASE-WISE PERFORMANCE ANALYSIS', margin, y);
+    y += 20;
 
     const phaseGroups = new Map<string, PersistedQuestionMetric[]>();
     questionMetrics.forEach(q => {
@@ -132,51 +156,134 @@ export default function ResultsModal({
       phaseGroups.get(p)!.push(q);
     });
 
-    addWrappedText('Phase-wise Breakdown', { bold: true, size: 14, bottomGap: 4 });
+    for (const [phase, phaseQs] of phaseGroups.entries()) {
+      ensureSpace(150);
+      const pScores = finalScores && finalScores[phase] ? finalScores[phase] : null;
 
-    if (questionMetrics.length === 0) {
-      addWrappedText('No question metrics available.', { bottomGap: 8 });
-    } else {
-      for (const [phase, phaseQs] of phaseGroups.entries()) {
-        ensureSpace(lineHeight * 3);
-        const phaseName = phase.toUpperCase().replace('_', ' ');
-        const pScores = finalScores && finalScores[phase] ? finalScores[phase] : null;
+      // Phase Container
+      const startY = y;
+      pdf.setDrawColor(COLORS.BORDER[0], COLORS.BORDER[1], COLORS.BORDER[2]);
+      pdf.setLineWidth(1);
+      
+      // Phase Header
+      y += 20;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
+      pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      pdf.text(phase.toUpperCase().replace(/_/g, ' '), margin + 15, y);
+      
+      if (pScores) {
+        pdf.setTextColor(COLORS.PINK[0], COLORS.PINK[1], COLORS.PINK[2]);
+        pdf.text(`EFFICIENCY: ${pScores.overall || 0}/10`, margin + contentWidth - 15, y, { align: 'right' });
+      }
+      y += 10;
+      pdf.line(margin + 15, y, margin + contentWidth - 15, y);
+      y += 20;
 
-        addWrappedText(`--- PHASE: ${phaseName} ---`, { bold: true, size: 12, bottomGap: 4 });
-        if (pScores) {
-          if (pScores.metrics) {
-            const metricsText = Object.entries(pScores.metrics)
-              .map(([k, v]) => `${k.charAt(0).toUpperCase() + k.slice(1).replace('_', ' ')}: ${v || 0}`)
-              .join(' | ');
-            addWrappedText(metricsText, { size: 10, bottomGap: 4 });
-          }
+      // Metrics Badges
+      if (pScores?.metrics) {
+        let badgeX = margin + 15;
+        Object.entries(pScores.metrics).forEach(([k, v]) => {
+          const txt = `${k.replace(/_/g, ' ')}: ${v}/10`.toUpperCase();
+          const tw = pdf.getTextWidth(txt) + 10;
+          if (badgeX + tw > margin + contentWidth - 15) { badgeX = margin + 15; y += 20; }
+          
+          pdf.setFillColor(243, 244, 246);
+          pdf.rect(badgeX, y - 10, tw, 14, 'F');
+          pdf.setFontSize(7);
+          pdf.setTextColor(75, 85, 99);
+          pdf.text(txt, badgeX + 5, y);
+          badgeX += tw + 8;
+        });
+        y += 20;
+      }
 
-          if (pScores.advice && pScores.advice.length > 0) {
-            addWrappedText(`AI Advice:`, { bold: true, size: 10 });
-            pScores.advice.forEach((adv: string) => addWrappedText(`• ${adv}`, { size: 9 }));
-            addWrappedText(` `, { bottomGap: 4 });
-          }
+      // Advice Box
+      if (pScores?.advice && pScores.advice.length > 0) {
+        const adviceLines = pScores.advice.flatMap(a => pdf.splitTextToSize(`• ${a}`, contentWidth - 50));
+        const boxHeight = adviceLines.length * 12 + 25;
+        ensureSpace(boxHeight);
+        
+        pdf.setFillColor(254, 252, 232);
+        pdf.rect(margin + 15, y, contentWidth - 30, boxHeight, 'F');
+        pdf.setDrawColor(COLORS.GOLD[0], COLORS.GOLD[1], COLORS.GOLD[2]);
+        pdf.setLineWidth(3);
+        pdf.line(margin + 15, y, margin + 15, y + boxHeight);
+        
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(133, 77, 14);
+        pdf.text('STRATEGIC ADVICE', margin + 25, y + 15);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(113, 63, 18);
+        adviceLines.forEach((line: string, i: number) => {
+          pdf.text(line, margin + 25, y + 30 + (i * 12));
+        });
+        y += boxHeight + 15;
+      }
+
+      // --- ADDED: Question Detail & Transcript ---
+      phaseQs.forEach((q) => {
+        ensureSpace(80);
+        pdf.setDrawColor(COLORS.BORDER[0], COLORS.BORDER[1], COLORS.BORDER[2]);
+        pdf.setLineWidth(0.5);
+        pdf.line(margin + 15, y, margin + contentWidth - 15, y); // Subtle separator
+        y += 15;
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(9);
+        pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+        
+        const qLines = pdf.splitTextToSize(`Q: ${q.question_text}`, contentWidth - 40);
+        qLines.forEach((line: string) => {
+          pdf.text(line, margin + 15, y);
+          y += 12;
+        });
+
+        if (q.candidate_answer) {
+          pdf.setFont('helvetica', 'italic');
+          pdf.setFontSize(8.5);
+          pdf.setTextColor(COLORS.TEXT_LIGHT[0], COLORS.TEXT_LIGHT[1], COLORS.TEXT_LIGHT[2]);
+          const aLines = pdf.splitTextToSize(`Candidate Response: "${q.candidate_answer}"`, contentWidth - 60);
+          aLines.forEach((line: string) => {
+            ensureSpace(12);
+            pdf.text(line, margin + 25, y);
+            y += 11;
+          });
+          y += 5;
         }
 
-        phaseQs.forEach((q) => {
-          ensureSpace(lineHeight * 6);
-          addWrappedText(`Q. ${q.question_text}`, { bold: true });
-          if (q.candidate_answer) {
-            addWrappedText(`Candidate: "${q.candidate_answer.length > 300 ? q.candidate_answer.substring(0, 300) + '...' : q.candidate_answer}"`, { size: 10, bottomGap: 2 });
-          }
-          addWrappedText(`Confidence: ${scoreCell(q.question_averages.confidence_score)}`);
-          addWrappedText(`Voice: ${scoreCell(q.question_averages.voice_score)}`);
-          addWrappedText(`Facial: ${scoreCell(q.question_averages.facial_expression_score)}`);
-          addWrappedText(`Chunks: ${q.chunks.length}`, { bottomGap: 6 });
-        });
-      }
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+        pdf.text(`Confidence: ${scoreCell(q.question_averages.confidence_score)}  |  Voice: ${scoreCell(q.question_averages.voice_score)}  |  Facial: ${scoreCell(q.question_averages.facial_expression_score)}`, margin + 25, y);
+        y += 20;
+      });
+
+      y += 10;
     }
 
-    addWrappedText('Generated from actual session data only (no synthetic placeholders).', { size: 10 });
-    pdf.save(`interview-report-${interviewSessionId ?? Date.now()}.pdf`);
-  }, [chunkResults, questionMetrics, finalScores, interviewSessionId, interviewStartedAt, currentUserId, recordingTime, focusPct]);
+    // Footer
+    const footerY = pageHeight - 30;
+    pdf.setDrawColor(243, 244, 246);
+    pdf.line(margin, footerY - 10, margin + contentWidth, footerY - 10);
+    pdf.setFontSize(7);
+    pdf.setTextColor(156, 163, 175);
+    pdf.text('© 2026 InterviewAI Behavioral Analytics Platform', margin, footerY);
+    pdf.text(`Confidential Report • Ref: ${(interviewSessionId || '').slice(0, 8)}`, margin + contentWidth, footerY, { align: 'right' });
+
+    pdf.save(`interview-report-${(interviewSessionId || '').slice(0, 8) || Date.now()}.pdf`);
+  }, [chunkResults, questionMetrics, finalScores, interviewSessionId, interviewStartedAt, currentUserId, recordingTime]);
+
 
   if (!show) return null;
+
+  // Calculate live UI stats
+  const liveFocusPct = mean(chunkResults.map(c => {
+    const counts = getChunkGazeCounts(c);
+    return counts.total > 0 ? (counts.focused / counts.total) * 100 : 0;
+  })) ?? 0;
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-6">
@@ -193,22 +300,20 @@ export default function ResultsModal({
         </div>
 
         <div className="p-6">
-          {/* Summary Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <StatCard label="Focus Score" value={`${focusPct.toFixed(1)}%`} color="blue" />
+            <StatCard label="Focus Score" value={`${liveFocusPct.toFixed(1)}%`} color="blue" />
             <StatCard label="Voice Skills" value={scoreCell(mean(chunkResults.map(c => c.voice_analysis?.score)))} color="emerald" />
             <StatCard label="Avg Confidence" value={scoreCell(mean(chunkResults.flatMap(c => c.predictions.map(p => p.confidence))))} color="purple" />
             <StatCard label="Facial Expression" value={scoreCell(mean(chunkResults.map(c => c.facial_analysis?.score)))} color="green" />
           </div>
 
-          {/* Per-chunk breakdown */}
           <div className="bg-white/5 p-4 rounded-lg border border-white/10 max-h-64 overflow-y-auto">
             <h3 className="text-sm font-semibold text-white mb-3">Per-Chunk Breakdown</h3>
             <div className="space-y-2">
               {chunkResults.map((chunk, idx) => {
                 const counts = getChunkGazeCounts(chunk);
                 return (
-                  <div key={chunk.chunkId} className="text-xs p-3 rounded bg-white/5 border border-white/10">
+                  <div key={`${chunk.chunkId}-${idx}`} className="text-xs p-3 rounded bg-white/5 border border-white/10">
                     <div className="flex justify-between items-center">
                       <span className="font-mono text-gray-400">Chunk {idx + 1}</span>
                       <div className="flex gap-3">
@@ -240,6 +345,7 @@ export default function ResultsModal({
           >
             {persistingSession ? 'Saving…' : 'Close & Go Home'}
           </button>
+          
           <button
             disabled={pendingChunks > 0 || pendingUploads > 0}
             onClick={exportInterviewReport}

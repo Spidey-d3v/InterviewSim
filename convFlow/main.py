@@ -72,6 +72,7 @@ class ChunkMetricModel(BaseModel):
 class QuestionMetricModel(BaseModel):
     question_index: int
     question_text: str
+    candidate_answer: Optional[str] = ""
     chunks: list[ChunkMetricModel] = Field(default_factory=list)
 
 
@@ -81,6 +82,7 @@ class FinalizeInterviewSessionPayload(BaseModel):
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     question_metrics_json: list[QuestionMetricModel] = Field(default_factory=list)
+    llm_evaluation_json: Optional[dict] = None
 
 
 def _safe_mean(values: list[Optional[float]]) -> Optional[float]:
@@ -157,6 +159,9 @@ async def publish_interview_end(room_name: str):
     if not agent_room_ref or not engine:
         return
 
+    # Wait for any pending phase evaluations to finish
+    await engine.wait_for_evaluations()
+
     payload = {
         "event": "interview_end",
         "ts": time.time(),
@@ -170,7 +175,7 @@ async def publish_interview_end(room_name: str):
     print("📡 Sent interview_end to frontend")
 
 # -------------------- SmartTurn --------------------
-smart_turn = SmartTurnV3(threshold=0.5)
+smart_turn = SmartTurnV3(threshold=0.4)
 
 # -------------------- TTS --------------------
 
@@ -277,8 +282,13 @@ async def token(
                 profile = profile_res.data[0] if isinstance(profile_res.data, list) else profile_res.data
 
             if profile:
+                print(f"📊 [DEBUG] Found profile for user_id {user_id}")
+                
                 resume_text = (profile.get("resume_text") or "").strip()
                 resume_json = profile.get("resume_json")
+                
+                print(f"📊 [DEBUG] resume_json keys: {list(resume_json.keys()) if isinstance(resume_json, dict) else 'Not a dict'}")
+                print(f"📊 [DEBUG] resume_text length: {len(resume_text)} chars")
                 
                 # Prioritize name from Parsed Resume
                 if resume_json and isinstance(resume_json, dict):
@@ -288,10 +298,16 @@ async def token(
                 if not candidate_name:
                     candidate_name = profile.get("full_name") or ""
 
+                print(f"📊 [DEBUG] Resolved candidate_name: '{candidate_name}'")
+
                 if resume_text:
                     resume_context += f"Resume Text:\n{resume_text[:3000]}\n\n"
                 if resume_json:
                     resume_context += f"Resume JSON:\n{json.dumps(resume_json)[:3000]}"
+                
+                print(f"📊 [DEBUG] Final resume_context size: {len(resume_context)} chars")
+            else:
+                print(f"⚠️ [DEBUG] No profile found in Supabase for user_id: {user_id}")
         except Exception as e:
             print(f"⚠️ Could not load resume context for user {user_id}: {e}")
 
@@ -310,7 +326,7 @@ async def token(
             sample_rate=16000,
             max_turn_seconds=8.0,
             min_speech_seconds=1.5,
-            silence_trigger_ms=1000,
+            silence_trigger_ms=700,
             frame_duration_ms=10,
         ),
         "progressive_stt": ProgressiveSTTController(whisper_stt),
@@ -319,6 +335,7 @@ async def token(
         "tts_lock": asyncio.Lock(),
         "smart_turn_checked": False,
         "interview_end_sent": False,
+        "repeat_task": None,
     }
 
     audio_source = rtc.AudioSource(sample_rate=48000, num_channels=1)
@@ -383,6 +400,10 @@ async def token(
     def on_track_subscribed(track, publication, participant):
         if track.kind != rtc.TrackKind.KIND_AUDIO:
             return
+        # Only start audio handling if the room state still exists
+        if room_name not in room_states:
+            print(f"⚠️ track_subscribed for unknown room {room_name}, ignoring")
+            return
         asyncio.create_task(handle_audio(track, room_name))
 
     @agent_room.on("disconnected")
@@ -390,10 +411,13 @@ async def token(
         print(f"🧹 Cleaning up room {room_name} (Agent disconnected)")
         cleanup_room(room_name)
 
-    @agent_room.on("participant_disconnected")
-    def on_participant_disconnected(participant):
-      print(f"👋 User left room {room_name}. Force cleaning...")
-      cleanup_room(room_name)
+        @agent_room.on("participant_disconnected")
+        def on_participant_disconnected(participant):
+            # If room already cleaned up, ignore repeated disconnect events
+            if room_name not in rooms:
+                return
+            print(f"👋 User left room {room_name}. Force cleaning...")
+            cleanup_room(room_name)
 
     @agent_room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
@@ -408,6 +432,11 @@ async def token(
           state["tts_busy"] = True # Blocks audio processing
           state["buffer"].reset()
           state["progressive_stt"].reset()
+
+          if state.get("repeat_task"):
+            state["repeat_task"].cancel()
+            state["repeat_task"] = None
+
           if room_name in voice_agents:
             voice_agents[room_name].stop_tts() # Stop current speech
 
@@ -417,6 +446,9 @@ async def token(
           state["buffer"].reset()
           state["progressive_stt"].reset()
           
+          if state.get("repeat_task"):
+            state["repeat_task"].cancel()
+
           if room_name in voice_agents:
             async def re_ask():
               async with state["tts_lock"]:
@@ -426,12 +458,17 @@ async def token(
                     async def on_update(text, final): 
                       await publish_new_question(room_name, text, is_final=final)
                     await voice_agents[room_name].repeat_question(last_q, on_question_update=on_update)
+                except asyncio.CancelledError:
+                   print(f"⚠️ re_ask task cancelled for {room_name}")
+                   raise
                 finally:
                    # Clear any noise captured during the repeat
                    state["buffer"].reset()
                    state["progressive_stt"].reset()
                    state["tts_busy"] = False
-            asyncio.create_task(re_ask())
+                   state["repeat_task"] = None
+            
+            state["repeat_task"] = asyncio.create_task(re_ask())
 
       except Exception as e:
         print(f"⚠️ Error handling data packet: {e}")
@@ -511,7 +548,8 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             "user_id": payload.user_id,
             "started_at": payload.started_at,
             "completed_at": payload.completed_at,
-            "question_metrics_json": [q.model_dump() for q in payload.question_metrics_json],
+            # Use exclude_none to avoid sending candidate_answer if it's not supported/present
+            "question_metrics_json": [q.model_dump(exclude_none=True) for q in payload.question_metrics_json],
             "overall_confidence_score": _clamp_01(_safe_mean([c.confidence_score for c in all_chunks])),
             "overall_facial_expression_score": _clamp_01(_safe_mean([c.facial_expression_score for c in all_chunks])),
             "overall_voice_score": _clamp_01(_safe_mean([c.voice_score for c in all_chunks])),
@@ -520,7 +558,20 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             **_compute_overall_gaze(all_chunks),
         }
 
-        supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+        if payload.llm_evaluation_json:
+            row["llm_evaluation_json"] = payload.llm_evaluation_json
+
+        try:
+            supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+        except Exception as db_err:
+            # Fallback for missing columns
+            err_msg = str(db_err)
+            if "llm_evaluation_json" in err_msg or "PGRST204" in err_msg:
+                print("⚠️ Supabase column 'llm_evaluation_json' missing. Retrying without it...")
+                row.pop("llm_evaluation_json", None)
+                supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+            else:
+                raise db_err
 
         return {
             "status": "success",
@@ -534,8 +585,12 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
 
 # -------------------- LiveKit Agent --------------------
 async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
-    state = room_states[room_name]
-    voice_agent = voice_agents[room_name]
+    # Defensive guards: room may have been cleaned up before this task runs
+    state = room_states.get(room_name)
+    voice_agent = voice_agents.get(room_name)
+    if state is None or voice_agent is None:
+        print(f"⚠️ handle_audio called for missing room state {room_name}, aborting audio handler")
+        return
     buffer = state["buffer"]
     progressive_stt = state["progressive_stt"]
     stream = AudioStream(track)
@@ -586,17 +641,19 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                 print(f"⏱ STT Latency: {stt_done_time - turn_start_time:.3f}s")
 
                 # Publish turn_end data message to LiveKit room so frontend flushes video
-                agent_room_ref = rooms[room_name]
-                await agent_room_ref.local_participant.publish_data(
-                    json.dumps({
-                        "event": "turn_end", 
-                        "ts": time.time(),
-                        "transcript": transcript  # Added transcript text
-                    }).encode(),
-                    reliable=True,
-                )
-
-                print("📡 Sent turn_end to frontend")
+                agent_room_ref = rooms.get(room_name)
+                if not agent_room_ref:
+                    print(f"⚠️ agent room missing when publishing turn_end for {room_name}, skipping")
+                else:
+                    await agent_room_ref.local_participant.publish_data(
+                        json.dumps({
+                            "event": "turn_end", 
+                            "ts": time.time(),
+                            "transcript": transcript  # Added transcript text
+                        }).encode(),
+                        reliable=True,
+                    )
+                    print("📡 Sent turn_end to frontend")
 
                 state["vad_buffer"] = np.zeros(0, dtype=np.float32)
                 buffer.reset()

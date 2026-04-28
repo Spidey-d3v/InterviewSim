@@ -94,19 +94,20 @@ class StreamingVoiceAgent:
     async def _tts_worker(self):
         while True:
             chunk = await self.tts_queue.get()
-            if chunk is None:
-                self.tts_queue.task_done()
-                break
+            try:
+                if chunk is None:
+                    break
 
-            for audio_chunk in self.tts.synthesize(chunk):
-                if not self.first_audio_emitted:
-                    now = asyncio.get_event_loop().time()
-                    print(f"⏱ First Audio Latency: {now - self.turn_start:.3f}s")
-                    self.first_audio_emitted = True
-                await self.publish_audio(audio_chunk)
-            
-            await asyncio.sleep(0.05)
-            self.tts_queue.task_done()
+                for audio_chunk in self.tts.synthesize(chunk):
+                    if not self.first_audio_emitted:
+                        now = asyncio.get_event_loop().time()
+                        print(f"⏱ First Audio Latency: {now - self.turn_start:.3f}s")
+                        self.first_audio_emitted = True
+                    await self.publish_audio(audio_chunk)
+                
+                await asyncio.sleep(0.05)
+            finally:
+                self.tts_queue.task_done()
 
     async def handle_turn(
         self,
@@ -123,7 +124,7 @@ class StreamingVoiceAgent:
         self.turn_start = stt_done_time
         self.first_audio_emitted = False
         chunker = SentenceChunker()
-        tts_task = asyncio.create_task(self._tts_worker())
+        self.tts_task_ref = asyncio.create_task(self._tts_worker())
         streamed_question = ""
         last_emit_len = 0
         last_emit_ts = 0.0
@@ -131,35 +132,40 @@ class StreamingVoiceAgent:
         min_emit_delta_chars = 10
     
         # Stream tokens
-        async for token in self.interview_engine.stream_step(prompt):
-            streamed_question += token
-            if on_question_update:
-                now = asyncio.get_event_loop().time()
-                should_emit = (
-                    len(streamed_question.strip()) - last_emit_len >= min_emit_delta_chars
-                    or token.endswith((".", "?", "!", "\n"))
-                    or now - last_emit_ts >= min_emit_interval_s
-                )
-                if should_emit:
-                    text = streamed_question.strip()
-                    if text:
-                        await on_question_update(text, False)
-                        last_emit_len = len(text)
-                        last_emit_ts = now
+        try:
+            async for token in self.interview_engine.stream_step(prompt):
+                streamed_question += token
+                if on_question_update:
+                    now = asyncio.get_event_loop().time()
+                    should_emit = (
+                        len(streamed_question.strip()) - last_emit_len >= min_emit_delta_chars
+                        or token.endswith((".", "?", "!", "\n"))
+                        or now - last_emit_ts >= min_emit_interval_s
+                    )
+                    if should_emit:
+                        text = streamed_question.strip()
+                        if text:
+                            await on_question_update(text, False)
+                            last_emit_len = len(text)
+                            last_emit_ts = now
 
-            chunks = await chunker.feed(token)
-            for sentence in chunks:
-                await self.tts_queue.put(sentence)
+                chunks = await chunker.feed(token)
+                for sentence in chunks:
+                    await self.tts_queue.put(sentence)
+            
+            # After ALL tokens processed
+            leftover = chunker.flush()
+            if leftover:
+                await self.tts_queue.put(leftover)
+            
+            # Signal end and wait for TTS to finish
+            await self.tts_queue.put(None)
+            await self.tts_task_ref
+        except asyncio.CancelledError:
+            print("⚠️ handle_turn cancelled")
+            self.stop_tts()
+            raise
         
-        # After ALL tokens processed
-        leftover = chunker.flush()
-        if leftover:
-            await self.tts_queue.put(leftover)
-        
-        # Signal end and wait for TTS to finish
-        await self.tts_queue.put(None)
-        await tts_task
-
         final_question = self.interview_engine.state.get("last_question")
         if on_question_update and final_question:
             await on_question_update(final_question, True)

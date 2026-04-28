@@ -208,29 +208,35 @@ export default function LandingPage() {
             Multi-modal analysis, real-time gaze tracking, and personalized coaching – end-to-end intelligence for your career growth.
           </p>
 
-          {/* HIGHLIGHTED CENTRAL CTA: RESUME UPLOAD */}
-          <div className="relative group inline-block animate-fade-in-up mb-12" style={{ animationDelay: '0.3s' }}>
-            <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-            <button
-              onClick={handleUploadResumeClick}
-              className="relative px-10 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black text-xl rounded-2xl transition-all hover:scale-105 flex items-center gap-4 shadow-2xl"
-            >
-              <UploadCloud size={28} strokeWidth={3} />
-              {hasResume ? "Update Your Resume" : "Upload Resume to Personalize"}
-            </button>
-            <div className="mt-4 flex items-center gap-4 text-gray-500 text-[10px] font-bold uppercase tracking-widest ml-1">
-              <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> Instant Parsing</span>
-              <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> AI Question Gen</span>
+          <div className="flex flex-col md:flex-row items-center gap-6 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
+            {/* Start Session (Primary Action) - 2 parts width */}
+            <div className="relative group w-full md:w-[66%]">
+              <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+              <button
+                onClick={handleStartInterview}
+                className="relative w-full px-8 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black text-xl rounded-2xl transition-all hover:scale-[1.02] flex items-center justify-center gap-4 shadow-2xl"
+              >
+                Start Session
+              </button>
+            </div>
+
+            {/* Update Resume (Secondary Action) - 1 part width */}
+            <div className="relative group w-full md:w-[33%]">
+              <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur opacity-10 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+              <button
+                onClick={handleUploadResumeClick}
+                className="relative w-full px-6 py-5 bg-white/5 border border-white/10 text-white font-bold text-lg rounded-2xl transition-all hover:bg-white/10 flex items-center justify-center gap-3 backdrop-blur-md"
+              >
+                <UploadCloud size={22} />
+                {hasResume ? "Update Resume" : "Upload Resume"}
+              </button>
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-4 animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <button
-              onClick={handleStartInterview}
-              className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-100 transition-all"
-            >
-              Skip to Practice Mode →
-            </button>
+          <div className="mt-6 flex items-center gap-6 text-gray-500 text-[10px] font-bold uppercase tracking-widest ml-1 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
+            <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> Instant Parsing</span>
+            <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> AI Question Gen</span>
+            <span className="flex items-center gap-1.5"><CheckCircle size={12} className="text-green-500" /> Real-time Feedback</span>
           </div>
         </div>
 

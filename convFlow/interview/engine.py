@@ -24,6 +24,7 @@ class InterviewEngine:
         self.llm = llm
         self.state = create_initial_state()
         self.interview_end = False
+        self.eval_tasks = []
 
         if job_role:
             self.state["job_role"] = job_role
@@ -50,9 +51,18 @@ class InterviewEngine:
         return self.state.get("last_question")
 
     async def _run_evaluator(self, phase, transcript):
-        result = await node_s_evaluator(self.llm, phase, transcript)
+        task = asyncio.create_task(node_s_evaluator(self.llm, phase, transcript))
+        self.eval_tasks.append(task)
+        try:
+            result = await task
+            self.state["candidate_profile"]["scores"][phase] = result
+        finally:
+            if task in self.eval_tasks:
+                self.eval_tasks.remove(task)
 
-        self.state["candidate_profile"]["scores"][phase] = result
+    async def wait_for_evaluations(self):
+        if self.eval_tasks:
+            await asyncio.gather(*self.eval_tasks, return_exceptions=True)
 
     async def stream_step(self, transcript: str):
 
@@ -235,13 +245,14 @@ class InterviewEngine:
         # -------------------- NODE R (GENERATOR) --------------------
         final_response = ""
 
-        async for token in node_r_generate_stream(
-            self.llm,
-            self.state,
-            selected_context
-        ):
-            final_response += token
-            yield token
-
-        # -------------------- UPDATE LAST QUESTION --------------------
-        self.state["last_question"] = final_response
+        try:
+            async for token in node_r_generate_stream(
+                self.llm,
+                self.state,
+                selected_context
+            ):
+                final_response += token
+                yield token
+        finally:
+            if final_response.strip():
+                self.state["last_question"] = final_response.strip()

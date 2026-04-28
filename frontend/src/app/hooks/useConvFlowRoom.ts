@@ -5,6 +5,7 @@ import {
   RemoteTrack,
   Track,
 } from "livekit-client";
+import { getLiveKitToken, clearLiveKitToken } from "../../utils/livekitToken";
 
 const CONVFLOW_BACKEND = "http://localhost:8001";
 const LIVEKIT_URL = "ws://localhost:7880";
@@ -64,6 +65,12 @@ export function useConvFlowRoom({
   useEffect(() => {
     if (!stream) return;
 
+    // Prevent duplicate connections: if a room already exists, skip connecting again.
+    if (roomRef.current) {
+      console.log('useConvFlowRoom: room already exists, skipping connect');
+      return;
+    }
+
     const room = new Room();
     roomRef.current = room;
 
@@ -113,28 +120,44 @@ export function useConvFlowRoom({
       }
     });
 
-    async function connect() {
+    async function connect(signal?: AbortSignal) {
       try {
-        const res = await fetch(`${CONVFLOW_BACKEND}/token`);
-        const { token } = await res.json();
+        // Use cached token to ensure only one /token request per client join
+        const token = await getLiveKitToken();
+        if (signal?.aborted) {
+          console.log('useConvFlowRoom: aborted before connecting');
+          return;
+        }
         await room.connect(LIVEKIT_URL, token);
         console.log("✅ Connected to Agent Room");
 
         if (stream && stream.getAudioTracks().length > 0) {
           const { LocalAudioTrack } = await import("livekit-client");
           const audioTrack = stream.getAudioTracks()[0];
-          await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack));
-          console.log("🎤 Mic is LIVE");
+          const existing = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+          if (existing && existing.track) {
+            console.log("🎤 Mic already published — skipping duplicate publish");
+          } else {
+            await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack));
+            console.log("🎤 Mic is LIVE");
+          }
         }
       } catch (err) {
+        if ((err as any)?.name === 'AbortError') {
+          console.log('useConvFlowRoom: token fetch aborted');
+          return;
+        }
         console.error("❌ Connection failed:", err);
       }
     }
 
-    connect();
+    const ac = new AbortController();
+    void connect(ac.signal);
 
     return () => {
       console.log("🧹 Cleanup");
+      // Abort any in-flight token fetch
+      try { ac.abort(); } catch {}
       room.disconnect();
       roomRef.current = null;
     };

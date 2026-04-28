@@ -19,12 +19,14 @@ export type PersistedChunkMetric = {
   facial_expression_score: number | null;
   voice_score: number | null;
   gaze_distribution: GazeDistribution;
+  smart_turn_probability: number | null;
+  smart_turn_is_complete: boolean | null;
 };
 
 export type PersistedQuestionMetric = {
   question_index: number;
   question_text: string;
-  candidate_answer?: string;
+  candidate_answer: string;
   phase?: string;
   chunks: PersistedChunkMetric[];
   question_averages: {

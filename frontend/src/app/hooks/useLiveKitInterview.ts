@@ -6,6 +6,7 @@ import {
   Room,
   RoomEvent,
   type RemoteParticipant,
+  Track,
 } from 'livekit-client';
 
 interface ConnectParams {
@@ -125,9 +126,14 @@ export function useLiveKitInterview() {
 
       if (params.withAudio ?? true) {
         try {
-          const mic = await createLocalAudioTrack();
-          await room.localParticipant.publishTrack(mic);
-          console.log('[LiveKit] Audio track published');
+          const existing = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+          if (existing && existing.track) {
+            console.log('[LiveKit] Audio track already published — skipping duplicate publish');
+          } else {
+            const mic = await createLocalAudioTrack();
+            await room.localParticipant.publishTrack(mic);
+            console.log('[LiveKit] Audio track published');
+          }
         } catch (err) {
           console.warn('[LiveKit] Audio track failed:', err instanceof Error ? err.message : err);
         }
