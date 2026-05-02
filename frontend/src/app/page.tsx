@@ -327,9 +327,9 @@ export default function LandingPage() {
                 {mlBars.map((bar, i) => (
                   <div key={i} className="flex items-center gap-4 animate-slide-in" style={{ animationDelay: `${i * 0.1}s`, opacity: 1 - (i * 0.08) }}>
                     <div className="w-2 h-2 bg-purple-400 rounded-full" />
-                    <div 
-                      className="flex-1 h-8 bg-gradient-to-r from-purple-500/40 to-transparent rounded" 
-                      style={{ width: `${bar.width}%` }} 
+                    <div
+                      className="flex-1 h-8 bg-gradient-to-r from-purple-500/40 to-transparent rounded"
+                      style={{ width: `${bar.width}%` }}
                       suppressHydrationWarning
                     />
                     <div className="text-xs text-gray-500 font-mono" suppressHydrationWarning>
