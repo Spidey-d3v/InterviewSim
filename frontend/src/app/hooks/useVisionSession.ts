@@ -134,6 +134,16 @@ export function useVisionSession() {
         const queue = outboundQueueRef.current.splice(0);
         queue.forEach((msg) => ws.send(msg));
         if (queue.length) console.log(`[useVisionSession] Flushed ${queue.length} queued message(s)`);
+
+        // Start ping interval to keep Cloudflare tunnel alive
+        const pingInterval = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: 'ping' }));
+          }
+        }, 30000); // Ping every 30s
+        
+        // Attach the interval ID to the websocket object so we can clear it on close
+        (ws as any)._pingInterval = pingInterval;
       };
       
       ws.onmessage = (event) => {
@@ -271,6 +281,9 @@ export function useVisionSession() {
       };
       
       ws.onclose = () => {
+        if ((ws as any)._pingInterval) {
+          clearInterval((ws as any)._pingInterval);
+        }
         console.log('Disconnected from vision server');
         setIsConnected(false);
         setIsSessionActive(false);

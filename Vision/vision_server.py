@@ -928,10 +928,9 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             # Receive message from frontend
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
+            message = await websocket.receive_json()
             action = message.get('action')
+            print(f"[WS] Received action: {action}")
             
             if action == 'start_session':
                 # video_path is required — frontend must upload video first via POST /upload_video
@@ -1092,6 +1091,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         'type': 'status',
                         'is_running': False
                     })
+            
+            elif action == 'ping':
+                # Ignore keep-alive pings
+                pass
                     
     except WebSocketDisconnect:
         print(f"Client disconnected. Waiting for {len(pending_chunk_tasks)} background tasks...")
