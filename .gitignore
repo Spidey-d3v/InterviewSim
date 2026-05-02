@@ -26,3 +26,5 @@ converted_*.wav
 *.ps1
 *.cmd
 
+
+cloudflared.exe
