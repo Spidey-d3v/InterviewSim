@@ -32,7 +32,7 @@ export interface UseGazeTrackingReturn {
 }
 
 export const useGazeTracking = (
-  serverUrl: string = 'ws://localhost:8000'
+  serverUrl: string = (process.env.NEXT_PUBLIC_VISION_URL || 'http://localhost:8000').replace(/^http/, 'ws')
 ): UseGazeTrackingReturn => {
   const [gazeData, setGazeData] = useState<GazeData | null>(null);
   const [connected, setConnected] = useState(false);

@@ -7,8 +7,8 @@ import {
 } from "livekit-client";
 import { getLiveKitToken, clearLiveKitToken } from "../../utils/livekitToken";
 
-const CONVFLOW_BACKEND = "http://localhost:8001";
-const LIVEKIT_URL = "ws://localhost:7880";
+const CONVFLOW_BACKEND = process.env.NEXT_PUBLIC_CONVFLOW_URL || "http://localhost:8001";
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "ws://localhost:7880";
 
 interface NewQuestionMeta {
   phase?: string;

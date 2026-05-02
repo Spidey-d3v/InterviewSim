@@ -1,0 +1,3 @@
+
+Interviewer: Great, Gaurav. So, let's dive into a situational question. Imagine you're working on a project that involves building a natural language processing model for sentiment analysis. During your testing phase, you notice that the model is consistently misclassifying negative reviews as positive. What steps would you take to diagnose and resolve this issue?
+Candidate: nan Can you switch to the next question?

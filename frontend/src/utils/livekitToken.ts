@@ -26,7 +26,8 @@ export async function getLiveKitToken(forceNew = false, role?: string, userId?: 
     if (currentUserId) params.append('user_id', currentUserId);
 
     const qs = params.toString() ? `?${params.toString()}` : '';
-    const TOKEN_URL = `http://localhost:8001/token${qs}`;
+    const CONVFLOW = process.env.NEXT_PUBLIC_CONVFLOW_URL || 'http://localhost:8001';
+    const TOKEN_URL = `${CONVFLOW}/token${qs}`;
     
     const res = await fetch(TOKEN_URL);
     if (!res.ok) throw new Error('Failed to fetch livekit token');

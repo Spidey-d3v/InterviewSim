@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const VISION_SERVER = "http://localhost:8000";
+const VISION_SERVER = process.env.NEXT_PUBLIC_VISION_URL || "http://localhost:8000";
 const MIME_TYPE = "video/webm;codecs=vp8,opus";
 
 export interface ChunkedRecorderOptions {

@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const SERVER_URL = 'http://localhost:8000';
+const SERVER_URL = process.env.NEXT_PUBLIC_VISION_URL || 'http://localhost:8000';
 const CHUNK_DURATION_MS = 15_000; // 15 seconds
 
 export interface GazeEntry {

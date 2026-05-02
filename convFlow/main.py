@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from livekit import rtc
-from livekit.rtc import Room, AudioStream
+from livekit.rtc import Room, AudioStream, RoomOptions, RtcConfiguration, IceTransportType
 from livekit.api import AccessToken, VideoGrants
 from audio.buffer import TurnBuffer
 from audio.vad import SileroVAD
@@ -34,9 +34,9 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-LIVEKIT_URL = "ws://localhost:7880"
-API_KEY = "devkey"
-API_SECRET = "APISECRETdevkey1234567890ABCDEFG"
+LIVEKIT_URL = os.getenv("LIVEKIT_URL", "ws://localhost:7880")
+API_KEY = os.getenv("LIVEKIT_API_KEY", "devkey")
+API_SECRET = os.getenv("LIVEKIT_API_SECRET", "APISECRETdevkey1234567890ABCDEFG")
 
 app = FastAPI()
 
@@ -314,11 +314,20 @@ async def token(
     token = create_token(identity, room_name)
 
     # Create and connect agent to same room
+    # Force TURN relay: direct UDP fails on restrictive networks/firewalls
+    is_cloud = LIVEKIT_URL.startswith("wss://")
+    room_opts = RoomOptions(
+        rtc_config=RtcConfiguration(
+            ice_transport_type=IceTransportType.Value("TRANSPORT_RELAY"),
+        )
+    ) if is_cloud else RoomOptions()
+
     agent_room = Room()
 
     await agent_room.connect(
         LIVEKIT_URL,
-        create_token("agent", room_name)
+        create_token("agent", room_name),
+        options=room_opts,
     )
 
     room_states[room_name] = {
@@ -362,9 +371,28 @@ async def token(
         candidate_name=candidate_name
     )
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
+
+    # Event that fires when the browser's audio track is subscribed by the agent.
+    # This is the strongest signal that the browser has fully connected and can
+    # receive audio — much later than participant_connected in the lifecycle.
+    browser_audio_ready = asyncio.Event()
+
+    @agent_room.on("participant_connected")
+    def _on_participant_joined(participant):
+        print(f"👤 Browser participant joined: {participant.identity}")
+
     async def start_interview():
         try:
-            await asyncio.sleep(1)
+            # Wait for the browser's mic track to arrive (up to 20s)
+            # This guarantees the browser has set up WebRTC fully and subscribed
+            # to the agent's audio track before we start speaking.
+            try:
+                await asyncio.wait_for(browser_audio_ready.wait(), timeout=20.0)
+                print("✅ Browser audio track ready — starting intro")
+                await asyncio.sleep(0.5)  # Tiny buffer for stability
+            except asyncio.TimeoutError:
+                print("⚠️ Browser audio track not received within 20s — starting intro anyway")
+
             state = room_states[room_name]
             async with state["tts_lock"]:
                 state["tts_busy"] = True
@@ -400,6 +428,8 @@ async def token(
     def on_track_subscribed(track, publication, participant):
         if track.kind != rtc.TrackKind.KIND_AUDIO:
             return
+        # Signal that the browser is fully connected and ready to receive audio
+        browser_audio_ready.set()
         # Only start audio handling if the room state still exists
         if room_name not in room_states:
             print(f"⚠️ track_subscribed for unknown room {room_name}, ignoring")

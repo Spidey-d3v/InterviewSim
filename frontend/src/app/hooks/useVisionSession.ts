@@ -121,7 +121,8 @@ export function useVisionSession() {
 
   const connect = useCallback(() => {
     try {
-      const ws = new WebSocket('ws://localhost:8000/ws');
+      const wsBase = (process.env.NEXT_PUBLIC_VISION_URL || 'http://localhost:8000').replace(/^http/, 'ws');
+      const ws = new WebSocket(`${wsBase}/ws`);
       
       ws.onopen = () => {
         console.log('✓ Connected to vision server');

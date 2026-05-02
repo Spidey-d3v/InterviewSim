@@ -60,6 +60,14 @@ class InterviewEngine:
             if task in self.eval_tasks:
                 self.eval_tasks.remove(task)
 
+    async def _update_summary_async(self, transcript: str):
+        """Runs rolling summarizer in background to prevent blocking audio latency."""
+        self.state["summary_till_now"] = await update_summary(
+            self.llm,
+            self.state.get("summary_till_now", ""),
+            transcript
+        )
+
     async def wait_for_evaluations(self):
         if self.eval_tasks:
             await asyncio.gather(*self.eval_tasks, return_exceptions=True)
@@ -225,10 +233,9 @@ class InterviewEngine:
                 )
 
                 # -------------------- UPDATE SUMMARY --------------------
-                self.state["summary_till_now"] = await update_summary(
-                    self.llm,
-                    self.state.get("summary_till_now", ""),
-                    transcript
+                # Run asynchronously so we don't block the next turn's audio response
+                asyncio.create_task(
+                    self._update_summary_async(transcript)
                 )
 
                 # -------------------- PHASE SWITCH --------------------

@@ -175,6 +175,8 @@ export default function InterviewRoom() {
         facial_expression_score: chunk.facial_analysis?.score ?? null,
         voice_score: chunk.voice_analysis?.score ?? null,
         gaze_distribution: buildChunkGazeDistribution(chunk),
+        smart_turn_probability: null,
+        smart_turn_is_complete: null,
       };
 
       grouped.get(qCtx.question_index)?.chunks.push(mappedChunk);
@@ -198,13 +200,22 @@ export default function InterviewRoom() {
   }, [chunkResults]);
 
   const handlePersistSession = useCallback(async (): Promise<boolean> => {
-    if (persistingSession || sessionPersisted || !interviewSessionId || !currentUserId) return false;
+    if (persistingSession || sessionPersisted || !interviewSessionId || !currentUserId) {
+      console.warn('⚠️ handlePersistSession guard failed:', {
+        persistingSession, sessionPersisted,
+        hasSessionId: !!interviewSessionId,
+        hasUserId: !!currentUserId,
+      });
+      return false;
+    }
     setPersistingSession(true);
     setSessionPersistError(null);
 
     try {
       const metrics = buildQuestionMetrics();
-      const res = await fetch('http://localhost:8001/api/interview-sessions/finalize', {
+      const CONVFLOW = process.env.NEXT_PUBLIC_CONVFLOW_URL || 'http://localhost:8001';
+      console.log(`📡 Persisting session to ${CONVFLOW}/api/interview-sessions/finalize`);
+      const res = await fetch(`${CONVFLOW}/api/interview-sessions/finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,16 +228,18 @@ export default function InterviewRoom() {
         }),
       });
       if (!res.ok) throw new Error('Database save failed');
+      console.log('✅ Session persisted successfully');
       setSessionPersisted(true);
       return true;
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error while saving session';
+      console.error('❌ Session persist error:', message);
       setSessionPersistError(message);
       return false;
     } finally {
       setPersistingSession(false);
     }
-  }, [buildQuestionMetrics, currentUserId, interviewSessionId, interviewStartedAt, persistingSession, sessionPersisted]);
+  }, [buildQuestionMetrics, currentUserId, finalScores, interviewSessionId, interviewStartedAt, persistingSession, sessionPersisted]);
 
   const handleLeave = async () => {
     if (endingInterviewRef.current) return;
