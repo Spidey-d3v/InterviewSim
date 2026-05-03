@@ -132,13 +132,6 @@ def main():
     
     results = {}
     
-    # Model 1: Facial Expression Model
-    results['Facial Expression'] = evaluate_model(
-        checkpoint_path="checkpoints/best_facial_expression_model.pth",
-        target_column="facial_expression",
-        model_name="Facial Expression Model"
-    )
-    
     # Model 2: Confidence Score Model (original)
     results['Confidence (best_model - Copy)'] = evaluate_model(
         checkpoint_path="checkpoints/best_model - Copy.pth",

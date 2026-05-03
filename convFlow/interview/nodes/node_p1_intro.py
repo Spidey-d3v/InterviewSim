@@ -23,11 +23,12 @@ async def node_p1_introduction(
          Resume Context: {resume_context}
          Job Description: {job_description}
          Aim(in order):
-         1. Welcome the candidate and briefly introduce {company_name} and the role (1-2 lines)
-         2. Get the candidate to:
-            - introduce themselves
-            - explain their background
-            - explain why they are a good fit
+         1. Welcome the candidate and briefly introduce {company_name} and the role (1-2 lines).
+         2. If Resume Context is available, naturally acknowledge one specific project or skill from it (e.g., "I see you've worked on [Project/Skill], which is very relevant...").
+         3. Get the candidate to:
+            - introduce themselves more broadly
+            - explain their background and journey
+            - explain why they are a good fit for this specific role
          Task: Generate interviewer's next response in provided tone.
          If the interview has not started yet, generate the opening welcome + first intro question only.
          If transcript exists, you may probe for further information if answer seems too short or incomplete.

@@ -9,7 +9,6 @@ interface AnalyticsPanelProps {
   chunkResults: ChunkResult[];
   latestConfidence: number | null;
   latestVoiceScore: number | null;
-  latestFacialScore: number | null;
   pendingChunks: number;
   pendingUploads: number;
   isChunkRecording: boolean;
@@ -20,7 +19,6 @@ export default function AnalyticsPanel({
   chunkResults,
   latestConfidence,
   latestVoiceScore,
-  latestFacialScore,
   pendingChunks,
   pendingUploads,
   isChunkRecording,
@@ -70,14 +68,6 @@ export default function AnalyticsPanel({
           value={latestVoiceScore !== null ? `${(latestVoiceScore * 100).toFixed(1)}%` : 'Waiting…'}
           percent={latestVoiceScore !== null ? latestVoiceScore * 100 : 0}
           color="bg-gradient-to-r from-emerald-500 to-teal-400"
-        />
-
-        {/* Facial Expression */}
-        <MetricSection
-          label="Facial Expression"
-          value={latestFacialScore !== null ? `${(latestFacialScore * 100).toFixed(1)}%` : 'Waiting…'}
-          percent={latestFacialScore !== null ? latestFacialScore * 100 : 0}
-          color="bg-gradient-to-r from-green-500 to-emerald-400"
         />
 
         {/* Tips */}

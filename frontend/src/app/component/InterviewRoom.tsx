@@ -80,7 +80,6 @@ export default function InterviewRoom() {
     latestConfidence,
     chunkResults,
     latestVoiceScore,
-    latestFacialScore,
     pendingChunks,
     chunkErrors,
     dismissChunkError,
@@ -161,7 +160,7 @@ export default function InterviewRoom() {
           candidate_answer: candidateAnswerMapRef.current[qCtx.question_index],
           phase: qCtx.phase,
           chunks: [],
-          question_averages: { confidence_score: null, facial_expression_score: null, voice_score: null },
+          question_averages: { confidence_score: null, voice_score: null },
         });
       }
 
@@ -172,7 +171,6 @@ export default function InterviewRoom() {
         question_index: qCtx.question_index,
         question_text: qCtx.question_text,
         confidence_score: (chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null) ?? null,
-        facial_expression_score: chunk.facial_analysis?.score ?? null,
         voice_score: chunk.voice_analysis?.score ?? null,
         gaze_distribution: buildChunkGazeDistribution(chunk),
         smart_turn_probability: null,
@@ -186,12 +184,10 @@ export default function InterviewRoom() {
     const metrics = Array.from(grouped.values());
     metrics.forEach((m) => {
       const confs = m.chunks.map(c => c.confidence_score);
-      const facials = m.chunks.map(c => c.facial_expression_score);
       const voices = m.chunks.map(c => c.voice_score);
 
       m.question_averages = {
         confidence_score: mean(confs),
-        facial_expression_score: mean(facials),
         voice_score: mean(voices),
       };
     });
@@ -357,7 +353,7 @@ export default function InterviewRoom() {
         <AnalyticsPanel
           isVisible={interviewStarted && !isPaused} chunkResults={chunkResults} latestConfidence={latestConfidence}
 
-          latestVoiceScore={latestVoiceScore} latestFacialScore={latestFacialScore}
+          latestVoiceScore={latestVoiceScore}
           pendingChunks={pendingChunks} pendingUploads={pendingUploads} isChunkRecording={isChunkRecording}
         />
 

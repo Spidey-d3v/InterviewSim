@@ -194,10 +194,6 @@ export const ReportPDF = ({ session, metrics }: ReportPDFProps) => {
             <Text style={styles.scoreVal}>{Math.round((session.overall_voice_score || 0) * 100)}%</Text>
             <Text style={styles.scoreLabel}>Voice & Communication</Text>
           </View>
-          <View style={styles.scoreCard}>
-            <Text style={styles.scoreVal}>{Math.round((session.overall_facial_expression_score || 0) * 100)}%</Text>
-            <Text style={styles.scoreLabel}>Facial Expression</Text>
-          </View>
         </View>
 
         {/* Phase Breakdown */}

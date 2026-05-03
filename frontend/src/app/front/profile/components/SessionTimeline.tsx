@@ -33,11 +33,9 @@ export default function SessionTimeline({ sessions, onSelectSession }: SessionTi
         });
         
         const avgScore = Math.round((
-          (session.overall_confidence_score || 0) + 
-          (session.overall_voice_score || 0) + 
-          (session.overall_facial_expression_score || 0)
-        ) / 3 * 100);
-
+          (session.overall_confidence_score || 0) +
+          (session.overall_voice_score || 0)
+        ) / 2 * 100);
         return (
           <motion.div
             key={session.session_id}

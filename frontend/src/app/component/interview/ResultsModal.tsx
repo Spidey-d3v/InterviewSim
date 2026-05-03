@@ -108,24 +108,21 @@ export default function ResultsModal({
     const focusPct = totalGaze > 0 ? (focusedGaze / totalGaze) * 100 : 0;
 
     const voiceVals = chunkResults.map(c => c.voice_analysis?.score).filter((v): v is number => typeof v === 'number');
-    const facialVals = chunkResults.map(c => c.facial_analysis?.score).filter((v): v is number => typeof v === 'number');
     const confVals = chunkResults.flatMap(c => c.predictions.map(p => p.confidence)).filter((v): v is number => typeof v === 'number');
 
     const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((a, b) => a + b, 0) / voiceVals.length) * 100 : 0;
-    const avgFacial = facialVals.length > 0 ? (facialVals.reduce((a, b) => a + b, 0) / facialVals.length) * 100 : 0;
     const avgConf = confVals.length > 0 ? (confVals.reduce((a, b) => a + b, 0) / confVals.length) * 100 : 0;
 
     // 2. Render Header
     drawHeader();
 
     // 3. Summary Cards
-    const cardWidth = (contentWidth - 20) / 3;
+    const cardWidth = (contentWidth - 10) / 2;
     const cardHeight = 60;
     
     [
       { label: 'CONFIDENCE', val: `${Math.round(avgConf)}%` },
       { label: 'COMMUNICATION', val: `${Math.round(avgVoice)}%` },
-      { label: 'NON-VERBAL', val: `${Math.round(avgFacial)}%` }
     ].forEach((card, i) => {
       const x = margin + i * (cardWidth + 10);
       pdf.setFillColor(COLORS.BG_GREY[0], COLORS.BG_GREY[1], COLORS.BG_GREY[2]);
@@ -257,7 +254,7 @@ export default function ResultsModal({
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7.5);
         pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
-        pdf.text(`Confidence: ${scoreCell(q.question_averages.confidence_score)}  |  Voice: ${scoreCell(q.question_averages.voice_score)}  |  Facial: ${scoreCell(q.question_averages.facial_expression_score)}`, margin + 25, y);
+        pdf.text(`Confidence: ${scoreCell(q.question_averages.confidence_score)}  |  Voice: ${scoreCell(q.question_averages.voice_score)}`, margin + 25, y);
         y += 20;
       });
 
@@ -300,11 +297,10 @@ export default function ResultsModal({
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <StatCard label="Focus Score" value={`${liveFocusPct.toFixed(1)}%`} color="blue" />
             <StatCard label="Voice Skills" value={scoreCell(mean(chunkResults.map(c => c.voice_analysis?.score)))} color="emerald" />
             <StatCard label="Avg Confidence" value={scoreCell(mean(chunkResults.flatMap(c => c.predictions.map(p => p.confidence))))} color="purple" />
-            <StatCard label="Facial Expression" value={scoreCell(mean(chunkResults.map(c => c.facial_analysis?.score)))} color="green" />
           </div>
 
           <div className="bg-white/5 p-4 rounded-lg border border-white/10 max-h-64 overflow-y-auto">
@@ -319,7 +315,6 @@ export default function ResultsModal({
                       <div className="flex gap-3">
                         <MetricSpan label="Voice" val={chunk.voice_analysis?.score} color="emerald" />
                         <MetricSpan label="Conf" val={chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null} color="purple" />
-                        <MetricSpan label="Facial" val={chunk.facial_analysis?.score} color="green" />
                         <span className="text-gray-400">Gaze: {counts.focused}/{counts.total}</span>
                       </div>
                     </div>

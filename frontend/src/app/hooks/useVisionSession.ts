@@ -56,7 +56,6 @@ export interface ChunkResult {
   predictions: PredictionEntry[];
   inference_summary: PredictionSummary | null;
   voice_analysis: VoiceAnalysis | null;
-  facial_analysis: { score: number | null; error: string | null } | null;
   receivedAt: string;
 }
 
@@ -81,7 +80,6 @@ export function useVisionSession() {
   const [predictions, setPredictions] = useState<PredictionEntry[]>([]);
   const [predictionSummary, setPredictionSummary] = useState<PredictionSummary | null>(null);
   const [latestConfidence, setLatestConfidence] = useState<number | null>(null);
-  const [latestFacialScore, setLatestFacialScore] = useState<number | null>(null);
 
   // Per-chunk results (chunked recording mode)
   const [chunkResults, setChunkResults] = useState<ChunkResult[]>([]);
@@ -216,11 +214,10 @@ export function useVisionSession() {
               predictions: message.predictions || [],
               inference_summary: message.inference_summary || null,
               voice_analysis,
-              facial_analysis: message.facial_analysis || null,
               receivedAt: new Date().toISOString(),
             };
             console.log(
-              `📦 Chunk processed: ${result.chunkId} | voice=${result.voice_analysis?.score?.toFixed(3)} | confidence=${result.predictions[0]?.confidence?.toFixed(3)} | facial=${result.facial_analysis?.score?.toFixed(3)} | gaze=${result.gaze_data.length} events`
+              `📦 Chunk processed: ${result.chunkId} | voice=${result.voice_analysis?.score?.toFixed(3)} | confidence=${result.predictions[0]?.confidence?.toFixed(3)} | gaze=${result.gaze_data.length} events`
             );
             setChunkResults((prev) => [...prev, result]);
             if (result.voice_analysis?.score != null) {
@@ -229,9 +226,6 @@ export function useVisionSession() {
             if (result.predictions.length > 0) {
               const lastConf = result.predictions[result.predictions.length - 1].confidence;
               setLatestConfidence(lastConf);
-            }
-            if (result.facial_analysis?.score != null) {
-              setLatestFacialScore(result.facial_analysis.score);
             }
             setProcessingChunks((prev) => {
               const next = new Set(prev);
@@ -422,7 +416,6 @@ export function useVisionSession() {
     // Per-chunk state
     chunkResults,
     latestVoiceScore,
-    latestFacialScore,
     processingChunks,
     pendingChunks: processingChunks.size,
     chunkErrors,

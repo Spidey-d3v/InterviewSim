@@ -64,7 +64,6 @@ class ChunkMetricModel(BaseModel):
     question_index: int
     question_text: str
     confidence_score: Optional[float] = None
-    facial_expression_score: Optional[float] = None
     voice_score: Optional[float] = None
     gaze_distribution: GazeDistributionModel = Field(default_factory=GazeDistributionModel)
 
@@ -581,7 +580,6 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             # Use exclude_none to avoid sending candidate_answer if it's not supported/present
             "question_metrics_json": [q.model_dump(exclude_none=True) for q in payload.question_metrics_json],
             "overall_confidence_score": _clamp_01(_safe_mean([c.confidence_score for c in all_chunks])),
-            "overall_facial_expression_score": _clamp_01(_safe_mean([c.facial_expression_score for c in all_chunks])),
             "overall_voice_score": _clamp_01(_safe_mean([c.voice_score for c in all_chunks])),
             "total_questions": len(payload.question_metrics_json),
             "total_chunks": len(all_chunks),

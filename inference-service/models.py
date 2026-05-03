@@ -8,7 +8,6 @@ class InferenceModels:
         self._initialized = False
         self.voice_analyzer = None
         self.video_inference_analyzer = None
-        self.facial_expression_analyzer = None
 
     async def initialize(self) -> None:
         if self._initialized:
@@ -17,13 +16,11 @@ class InferenceModels:
         module = self._load_vision_server_module()
         self.voice_analyzer = module.voice_analyzer
         self.video_inference_analyzer = module.video_inference_analyzer
-        self.facial_expression_analyzer = module.facial_expression_analyzer
 
         loop = asyncio.get_running_loop()
         await asyncio.gather(
             loop.run_in_executor(None, self.voice_analyzer.load),
             loop.run_in_executor(None, self.video_inference_analyzer.load),
-            loop.run_in_executor(None, self.facial_expression_analyzer.load),
         )
 
         self._initialized = True
@@ -40,23 +37,15 @@ class InferenceModels:
             video_path,
             chunk_id,
         )
-        facial_task = loop.run_in_executor(
-            None,
-            self.facial_expression_analyzer.analyze,
-            video_path,
-            chunk_id,
-        )
 
-        voice_result, confidence_result, facial_result = await asyncio.gather(
+        voice_result, confidence_result = await asyncio.gather(
             voice_task,
             confidence_task,
-            facial_task,
         )
 
         return {
             "voice_analysis": voice_result,
             "video_analysis": confidence_result,
-            "facial_analysis": facial_result,
         }
 
     @staticmethod

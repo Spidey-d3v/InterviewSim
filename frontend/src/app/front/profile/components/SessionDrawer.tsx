@@ -12,7 +12,8 @@ import {
   ArrowUpRight,
   ChevronRight,
   Target,
-  Lightbulb
+  Lightbulb,
+  MessageSquare
 } from 'lucide-react';
 import FocusRadar from './charts/FocusRadar';
 import dynamicImport from 'next/dynamic';
@@ -51,7 +52,7 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
   const scores = [
     { label: 'Confidence', val: session.overall_confidence_score, icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500/10' },
     { label: 'Voice Skills', val: session.overall_voice_score, icon: Mic2, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'Expression', val: session.overall_facial_expression_score, icon: Smile, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: 'Voice', val: session.overall_voice_score, icon: MessageSquare, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   ];
 
   return (

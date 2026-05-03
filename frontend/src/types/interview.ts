@@ -16,7 +16,6 @@ export type PersistedChunkMetric = {
   question_index: number;
   question_text: string;
   confidence_score: number | null;
-  facial_expression_score: number | null;
   voice_score: number | null;
   gaze_distribution: GazeDistribution;
   smart_turn_probability: number | null;
@@ -31,7 +30,6 @@ export type PersistedQuestionMetric = {
   chunks: PersistedChunkMetric[];
   question_averages: {
     confidence_score: number | null;
-    facial_expression_score: number | null;
     voice_score: number | null;
   };
 };

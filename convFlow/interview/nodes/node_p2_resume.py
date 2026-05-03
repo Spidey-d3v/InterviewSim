@@ -23,16 +23,17 @@ async def node_p2_resume_based(
         Job Description: {job_description}
         Summary of Previous Phases: {summary_till_now}
         Aim(in most fruitful order):
-        1) Evaluate work experience mentioned in resume if any else skip to (2)
-        2) Evaluate projects mentioned in resume if any 
-        3) Match relevant skills/experiences from resume to JD and delve deeper into it
-        Task: Generate interviewer's next response in provided tone which could be a new question or a follow-up using follow-up strategy.
+        1) Deep-dive into specific work experience or internships mentioned in the Resume Context.
+        2) Analyze specific projects mentioned in the Resume Context, focusing on technical choices and results.
+        3) Match relevant skills/experiences from the Resume Context directly to the JD requirements and probe for mastery.
+        Task: Generate a highly specific interviewer response that references actual details from the Resume Context.
         Follow-up Strategy: 
-        - If answer is short/incomplete/unsure: probe ONCE with a hint
-        - If second answer still weak: move to next topic (max 2 follow-ups per topic)
-        - Probing example: "Can you walk me through how you achieved that particular result?"
+        - Probe for implementation details, challenges overcome, and the specific impact of the candidate's work.
+        - If answer is short/incomplete/unsure: probe ONCE with a targeted hint based on the resume.
+        - If second answer still weak: move to next topic (max 2 follow-ups per topic).
         Rules:
-        - Target depth (implementation, challenges, impact) and relevance to JD
+        - NEVER ask generic "tell me about your experience" if specific details are in the Resume Context. Use them!
+        - Target depth (implementation, challenges, impact) and explicit relevance to JD.
         Conversation This Phase: if transcript exists, then {transcript} else {"Resume-based questioning has not started yet."}
         """
 

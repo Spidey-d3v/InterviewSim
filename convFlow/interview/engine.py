@@ -34,6 +34,7 @@ class InterviewEngine:
 
         if resume_context:
             self.state["resume_context"] = resume_context
+            print(f"✅ [ENGINE] Loaded Resume Context: {len(resume_context)} chars")
 
         if list_of_technical_topics:
             self.state["list_of_technical_topics"] = list_of_technical_topics
