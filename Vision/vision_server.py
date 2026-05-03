@@ -250,7 +250,6 @@ if str(_ATEMPT2_ROOT) not in sys.path:
     sys.path.insert(0, str(_ATEMPT2_ROOT))
 
 VIDEO_MODEL_PATH = str(_ATEMPT2_ROOT / "checkpoints" / "videoMAE_confidence_ranker_epoch6.pth")
-FACIAL_MODEL_PATH = str(_ATEMPT2_ROOT / "checkpoints" / "best_facial_expression_model.pth")
 VIDEO_NUM_FRAMES = 16
 
 try:
@@ -351,13 +350,7 @@ class VideoInferenceAnalyzer(_BaseVideoAnalyzer):
         super().__init__("VideoMAE", VIDEO_MODEL_PATH)
 
 
-class FacialExpressionAnalyzer(_BaseVideoAnalyzer):
-    def __init__(self):
-        super().__init__("FacialExpression", FACIAL_MODEL_PATH)
-
-
 video_inference_analyzer = VideoInferenceAnalyzer()
-facial_expression_analyzer = FacialExpressionAnalyzer()
 
 # ---------------------------------------------------------------------------
 # GazeAnalyzer — thin wrapper around vision.analyze_video (full model)
@@ -499,7 +492,6 @@ async def lifespan(app_: FastAPI):
     await asyncio.gather(
         loop.run_in_executor(None, voice_analyzer.load),
         loop.run_in_executor(None, video_inference_analyzer.load),
-        loop.run_in_executor(None, facial_expression_analyzer.load),
         loop.run_in_executor(None, gaze_analyzer.load),
     )
     print("[Startup] All models ready.")
@@ -764,16 +756,16 @@ async def _process_chunk(
     video_path: str,
     chunk_result_cache: dict,
 ) -> None:
-    """Process a single 15-s video chunk through all four analysis modules:
+    """Process a single 15-s video chunk through the analysis modules.
 
-    1. gaze_analyzer          — gaze tracking via vision.analyze_video (in-process)
-    2. video_inference_analyzer — VideoMAE confidence (in-process)
-    3. facial_expression_analyzer — facial expression score (in-process)
-    4. voice_analyzer         — speaking skills (in-process)
-
-    All four ML models run concurrently via asyncio.gather.
-    Semaphore limits to CHUNK_SEMAPHORE concurrent chunks.
-    Files are cleaned up in the finally block.
+    LATE FUSION STRATEGY (Update: 2026-05-03):
+    - We combine the Iris Tracking score with the VideoMAE NN score.
+    - Iris Tracking (Looking Forward %) is the DOMINANT signal (alpha=0.85).
+    - The VideoMAE NN score acts as a weak background signal (1-alpha=0.15).
+    - The Facial Expression model has been removed from this pipeline to focus
+      exclusively on gaze-driven confidence and general composure.
+    
+    Formula: final_score = (0.85 * iris_score) + (0.15 * nn_score)
     """
     loop = asyncio.get_running_loop()
 
@@ -781,14 +773,13 @@ async def _process_chunk(
         gaze_log_path = Path(__file__).parent / "data" / f"gaze_log_{chunk_id}.txt"
 
         try:
-            # ---- Run all four ML analyses concurrently ----
+            # ---- Run all ML analyses concurrently ----
             gaze_task   = loop.run_in_executor(None, gaze_analyzer.analyze,               video_path, chunk_id)
             voice_task  = loop.run_in_executor(None, voice_analyzer.analyze,              video_path, chunk_id)
             video_task  = loop.run_in_executor(None, video_inference_analyzer.analyze,    video_path, chunk_id)
-            facial_task = loop.run_in_executor(None, facial_expression_analyzer.analyze,  video_path, chunk_id)
 
-            gaze_data, voice_result, video_result, facial_result = await asyncio.gather(
-                gaze_task, voice_task, video_task, facial_task
+            gaze_data, voice_result, video_result = await asyncio.gather(
+                gaze_task, voice_task, video_task
             )
 
             # Compute gaze summary stats from raw log entries
@@ -814,30 +805,45 @@ async def _process_chunk(
                 "looking_away_pct":    round(gaze_counts["Looking Away"]    / gaze_total * 100, 1),
             } if gaze_data else {}
 
-            # Build a predictions list from the in-process VideoMAE result
+            # ---- LATE FUSION: Iris (0.85) + VideoMAE (0.15) ----
+            nn_score = video_result.get("score")
+            iris_score = gaze_summary.get("looking_forward_pct", 0.0) / 100.0
+            
+            alpha = 0.85
+            if nn_score is not None:
+                # Combine both scores; iris dominates
+                final_score = (alpha * iris_score) + ((1.0 - alpha) * nn_score)
+            else:
+                # Fallback if NN failed
+                final_score = iris_score
+            
+            final_score = round(final_score, 4)
+
+            # Build a predictions list from the fused result
             # so the frontend's existing ChunkResult shape stays compatible
             predictions = []
-            if video_result.get("score") is not None:
+            if video_result.get("score") is not None or gaze_data:
                 predictions = [{
                     "chunk": chunk_index,
                     "video_file": Path(video_path).name,
-                    "confidence": video_result["score"],
+                    "confidence": final_score,
+                    "raw_nn_score": nn_score,
+                    "raw_iris_score": iris_score,
                     "timestamp": time.time(),
                     "processing_time": 0,
                 }]
             inference_summary = {
                 "count": len(predictions),
-                "mean_confidence": video_result.get("score") or 0.0,
-                "min_confidence": video_result.get("score") or 0.0,
-                "max_confidence": video_result.get("score") or 0.0,
+                "mean_confidence": final_score,
+                "min_confidence": final_score,
+                "max_confidence": final_score,
             } if predictions else {}
 
             print(
                 f"[Chunk {chunk_index}] Done: "
-                f"gaze={len(gaze_data)} (L={gaze_summary.get('looking_left',0)} "
-                f"R={gaze_summary.get('looking_right',0)} F={gaze_summary.get('looking_forward',0)}), "
-                f"confidence={video_result.get('score')}, "
-                f"facial={facial_result.get('score')}, "
+                f"gaze={len(gaze_data)} (F_pct={gaze_summary.get('looking_forward_pct',0)}%), "
+                f"nn_score={nn_score}, "
+                f"fused_confidence={final_score}, "
                 f"voice={voice_result.get('score')}"
             )
 
@@ -850,7 +856,6 @@ async def _process_chunk(
                 'predictions': predictions,
                 'inference_summary': inference_summary,
                 'voice_analysis': voice_result,
-                'facial_analysis': facial_result,
             }
             chunk_result_cache[chunk_id] = chunk_payload
 
