@@ -101,7 +101,14 @@ if __name__ == "__main__":
     tts_busy = threading.Event()
 
     def on_tts_done():
-        print("TTS Finished, Resuming Mic\n")
+        print("TTS Finished, Resuming Mic (after 0.5s delay)\n")
+        # Clear buffer to ignore any audio captured during/immediately after TTS
+        buffer.reset()
+        smart_turn_probs.clear()
+        pending_turn["active"] = False
+        
+        # Small delay to ensure any "tail" audio or user reaction isn't captured
+        time.sleep(0.5)
         tts_busy.clear()
 
     tts.on_done = on_tts_done
@@ -358,12 +365,16 @@ if __name__ == "__main__":
 
     CONFIRM_WINDOW = 0.5 # 500ms
 
-    FAILSAFE_SILENCE_SECONDS = 2
+    FAILSAFE_SILENCE_SECONDS = 4
     FRAME_DURATION_SEC = 0.032
     FAILSAFE_SILENCE_FRAMES = int(FAILSAFE_SILENCE_SECONDS / FRAME_DURATION_SEC)
 
 
     async def on_audio_frame(frame: np.ndarray):
+        if np.isnan(frame).any():
+            print("⚠️ NaN detected in audio frame. Ignoring.")
+            return
+
         # ignore mic while tts speaking
         if tts_busy.is_set():
             return
@@ -378,7 +389,7 @@ if __name__ == "__main__":
         await progressive_stt.maybe_process(buffer.get_full_turn_audio())
 
         # -------------------------------------------------
-        # Hard silence failsafe (2s silence → force commit)
+        # Hard silence failsafe (4s silence → force commit)
         # -------------------------------------------------
 
         if (
@@ -386,7 +397,7 @@ if __name__ == "__main__":
             and buffer._silent_frames >= FAILSAFE_SILENCE_FRAMES
             and not pending_turn["active"]  
         ):
-            print("⏱ Failsafe triggered (2s silence). Forcing commit.")
+            print(f"⏱ Failsafe triggered ({FAILSAFE_SILENCE_SECONDS}s silence). Forcing commit.")
 
             raw_audio = buffer.get_full_turn_audio()
 

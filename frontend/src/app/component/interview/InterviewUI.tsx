@@ -160,7 +160,7 @@ export function InterviewMainDisplay({
                   </div>
                 </div>
                 <p className="text-lg text-white font-medium drop-shadow-md">
-                   {streamingQuestion || aiQuestions[questionIndex] || (questionStatus === 'processing' ? '...' : 'Introduce yourself.')}
+                   {streamingQuestion || aiQuestions[questionIndex] || (questionStatus === 'processing' ? 'Thinking...' : 'Introduce yourself.')}
                 </p>
               </div>
             </div>

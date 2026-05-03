@@ -1,11 +1,18 @@
 
-Interviewer: Hi Gaurav, thanks for coming in today! We're excited to talk to you about the Full Stack Developer role here at Apple, where you'll get to contribute to building innovative web applications. To start, could you please introduce yourself, tell us a bit about your background, and what makes you a great fit for this position?
-Candidate: A great fit for this position are my projects and the number of internships I have under my belt which help me understand how tech industries actually works and how they are different from a academic based project.
+Interviewer: Hi Shrey, thanks for coming in today. I'm Alex, and I'll be interviewing you for our AI Engineer role here at Apple, where we're always pushing the boundaries of what's possible with AI. I noticed on your resume you've built a real-time conversational AI agent – that sounds fascinating! To start, could you tell me a bit about yourself, your background, and what led you to apply for this specific role at Apple?
+Candidate: Yeah hi. So I think Apple has always been on the frontier edge of new technology and with my inclination towards working on new tech and new research in the fields of artificial intelligence and with the boom that is happening at this time. It was At this time. It was a very natural choice for me and when that opportunity came on your hiring portal, I just jump at it and applied for this.
 
-Interviewer: That's a great start, Gaurav. It's good to hear you're thinking about the practical application of your skills. Could you elaborate a bit more on your background? Perhaps walk me through your academic journey and any specific experiences that led you to pursue full-stack development?
-Candidate: nan I have worked on couple of websites, most of them by event hosting websites. I have also worked on academic projects where they needed a basic front end to display how everything worked and also the current platform that I am giving this interview on, the front end was completely design. The front 10 was completely designed by me.
+Interviewer: That's great to hear, Shrey! It's exciting that you're drawn to the innovative work we do here. So, you mentioned your inclination towards new tech and AI research. Could you elaborate a bit more on your journey into AI engineering? What specifically about your background and experiences makes you feel you'd be a strong fit for this AI Engineer role at Apple?
+Candidate: nan
 
-Interviewer: That's a great start, Gaurav. It's good to hear you're thinking about the practical application of your skills. Could you elaborate a bit more on your background? Perhaps walk me through your academic journey and any specific experiences that led you to pursue full-stack development?
+Interviewer: That's fantastic, Shrey! It's really encouraging to hear about your passion for AI and how it aligns with the kind of work we're doing here. To help me understand your background a little better, could you walk me through your journey into AI engineering? What specific experiences or projects have shaped your interest and prepared you for a role like this at Apple?
+Candidate: Ok so can you repeat your question? I actually didn't listen to it.
 
-Thanks for sharing that, Gaurav. It sounds like you've had some hands-on experience building user interfaces, especially for event-related websites. Could you tell me more about the technologies you used for those front-end designs, and perhaps walk me through one of those projects in a bit more detail, highlighting your specific contributions?
-Candidate: nan So I have worked with next J S in front. With next J S in front end I have also worked with Reyes, UGS and for packend I have used basic express plus note combination. I have also worked a little bit on rust. I have also dabbled a bit in golaing also. For the database I have used super base, post press paste web database I have used no skill through 5 days I have also used a skilled deployed systems. Those are the few out of all the systems I have used.
+Interviewer: No problem at all, Shrey! I can repeat that for you. I was just asking about your journey into AI engineering. Could you walk me through how you got interested in this field and what specific experiences or projects have really shaped that interest and prepared you for a role like this at Apple?
+Candidate: nan
+
+Interviewer: Thanks for clarifying! So, Shrey, to kick things off, could you tell me a bit about your journey into AI engineering? What sparked your interest in this field, and what experiences or projects have really solidified that passion and prepared you for a role like this here at Apple?
+Candidate: nan
+
+Interviewer: Thanks for clarifying! So, Shrey, to kick things off, could you tell me a bit about your journey into AI engineering? What sparked your interest in this field, and what experiences or projects have really solidified that passion and prepared you for a role like this here at Apple?
+Candidate: Achchha mujhe laga. Yeah so I would say what really prepared me for this rollout apple is.
