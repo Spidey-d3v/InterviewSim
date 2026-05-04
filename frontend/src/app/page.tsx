@@ -32,6 +32,14 @@ export default function LandingPage() {
   ];
 
   const checkAuthStatus = useCallback(async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      setIsLoggedIn(false);
+      setHasResume(false);
+      await supabase.auth.signOut();
+      return;
+    }
+
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
       setIsLoggedIn(false);
@@ -57,7 +65,7 @@ export default function LandingPage() {
   }, [supabase]);
 
   const handleStartInterview = () => {
-    if (!isLoggedIn) {
+    if (isLoggedIn === false || isLoggedIn === null) {
       router.push('/auth/login');
       return;
     }
@@ -174,10 +182,12 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-4">
-          {isLoggedIn ? (
+          {isLoggedIn === true ? (
             <button onClick={() => router.push('/front/profile')} className="text-sm text-gray-400 hover:text-white transition-colors">Dashboard</button>
-          ) : (
+          ) : isLoggedIn === false ? (
             <button onClick={() => router.push('/auth/login')} className="text-sm text-gray-400 hover:text-white transition-colors">Sign In</button>
+          ) : (
+            <div className="w-16 h-8" /> /* placeholder while loading */
           )}
           <button
             onClick={handleStartInterview}
@@ -228,7 +238,7 @@ export default function LandingPage() {
                 className="relative w-full px-6 py-5 bg-white/5 border border-white/10 text-white font-bold text-lg rounded-2xl transition-all hover:bg-white/10 flex items-center justify-center gap-3 backdrop-blur-md"
               >
                 <UploadCloud size={22} />
-                {hasResume ? "Update Resume" : "Upload Resume"}
+                {hasResume === true ? "Update Resume" : "Upload Resume"}
               </button>
             </div>
           </div>

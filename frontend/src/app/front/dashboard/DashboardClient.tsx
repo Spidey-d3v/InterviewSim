@@ -22,7 +22,7 @@ export default function DashboardClient({ sessions, profile, userId }: Dashboard
   const selectedSession = sessions.find(s => s.session_id === selectedSessionId);
 
   return (
-    <div className="flex min-h-screen bg-[#0a0a0f] text-white overflow-hidden">
+    <div className="flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
       {/* Permanent Sidebar */}
       <Sidebar />
       
@@ -48,20 +48,6 @@ export default function DashboardClient({ sessions, profile, userId }: Dashboard
               <p className="text-gray-500 mt-3 font-medium">
                 Welcome back, {profile?.full_name?.split(' ')[0] || 'Commander'}. Your behavioral analytics are synchronized.
               </p>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-4 bg-white/[0.03] border border-white/10 px-6 py-3 rounded-2xl backdrop-blur-md"
-            >
-              <div className="text-right">
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Current Level</p>
-                <p className="text-lg font-bold text-purple-400">Elite Candidate</p>
-              </div>
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center font-bold">
-                L5
-              </div>
             </motion.div>
           </header>
 
