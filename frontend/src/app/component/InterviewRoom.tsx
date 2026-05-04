@@ -294,7 +294,7 @@ export default function InterviewRoom() {
     onInterviewEnd: handleInterviewEnd,
     onNewQuestion: handleNewQuestion,
     stream: cameraStream,
-    isAiSpeaking: questionStatus === 'streaming' || isPaused,
+    isAiSpeaking: questionStatus === 'streaming' || questionStatus === 'processing' || isPaused,
   });
 
   const togglePause = useCallback(async () => {

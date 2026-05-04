@@ -199,6 +199,9 @@ whisper_stt = WhisperSTT()
 # vad expects 32ms frames but buffer collects 10ms frames -> rolling buffer added which collects till 32ms frames
 VAD_WINDOW_SAMPLES = int(16000 * 0.032)  # 32ms = 512 samples
 
+FAILSAFE_SILENCE_SECONDS = 4
+FAILSAFE_SILENCE_FRAMES = int(FAILSAFE_SILENCE_SECONDS / 0.032)  # ~125 frames at 32ms each
+
 # -------------------- Downsample Audio --------------------
 
 def downsample_48k_to_16k(pcm_int16: np.ndarray) -> np.ndarray:
@@ -219,6 +222,14 @@ def is_valid_transcript(text: str) -> bool:
     if len(stripped) < 3:
         return False
     return True
+
+def rms_energy(audio: np.ndarray) -> float:
+    """Compute root-mean-square energy of an audio signal."""
+    if len(audio) == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(audio.astype(np.float64) ** 2)))
+
+RMS_SILENCE_THRESHOLD = 0.005
 
 # -------------------- CORS --------------------
 
@@ -353,6 +364,7 @@ async def token(
         "tts_busy": False,
         "tts_lock": asyncio.Lock(),
         "smart_turn_cooldown": 0,     # frames until next SmartTurn check allowed
+        "post_tts_cooldown_until": 0.0,  # asyncio time until which audio is ignored post-TTS
         "interview_end_sent": False,
         "repeat_task": None,
     }
@@ -424,6 +436,7 @@ async def token(
                     state["vad"].reset()
                     state["vad_buffer"] = np.zeros(0, dtype=np.float32)
                     state["smart_turn_cooldown"] = 0
+                    state["post_tts_cooldown_until"] = asyncio.get_event_loop().time() + 0.5
                     state["tts_busy"] = False
         except Exception as e:
             print(f"⚠️ Failed to publish initial question for {room_name}: {e}")
@@ -503,11 +516,15 @@ async def token(
                    print(f"⚠️ re_ask task cancelled for {room_name}")
                    raise
                 finally:
-                   # Clear any noise captured during the repeat
-                   state["buffer"].reset()
-                   state["progressive_stt"].reset()
-                   state["tts_busy"] = False
-                   state["repeat_task"] = None
+                    # Clear any noise captured during the repeat
+                    state["buffer"].reset()
+                    state["progressive_stt"].reset()
+                    state["vad"].reset()
+                    state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                    state["smart_turn_cooldown"] = 0
+                    state["post_tts_cooldown_until"] = asyncio.get_event_loop().time() + 0.5
+                    state["tts_busy"] = False
+                    state["repeat_task"] = None
             
             state["repeat_task"] = asyncio.create_task(re_ask())
 
@@ -639,6 +656,11 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
        
         if state["tts_busy"]:
             continue
+
+        # Post-TTS cooldown: skip frames for 500ms after TTS ends
+        # to let mic AGC settle and avoid echo-triggered turns
+        if asyncio.get_event_loop().time() < state["post_tts_cooldown_until"]:
+            continue
         
         frame = event.frame
 
@@ -666,8 +688,98 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
 
             asyncio.create_task(progressive_stt.maybe_process(buffer))
 
+            # Hard silence failsafe: if user spoke enough but has been
+            # silent for 4+ seconds, force-commit the turn
+            if (
+                buffer.speech_samples >= buffer.min_speech_samples
+                and buffer._silent_frames >= FAILSAFE_SILENCE_FRAMES
+            ):
+                print(f"⏱ Failsafe: {FAILSAFE_SILENCE_SECONDS}s silence. Forcing turn commit.")
+                state["tts_busy"] = True
+
+                turn_audio_check = buffer.get_full_turn_audio()
+                if rms_energy(turn_audio_check) < RMS_SILENCE_THRESHOLD:
+                    print("⚠️ Failsafe audio too quiet, discarding")
+                    state["tts_busy"] = False
+                    buffer.reset()
+                    progressive_stt.reset()
+                    state["vad"].reset()
+                    state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                    state["smart_turn_cooldown"] = 0
+                    continue
+
+                turn_start_time = asyncio.get_event_loop().time()
+                transcript = await progressive_stt.finalize(buffer)
+
+                if not is_valid_transcript(transcript):
+                    print(f"⚠️ Failsafe transcript invalid: '{transcript}'")
+                    state["tts_busy"] = False
+                    buffer.reset()
+                    progressive_stt.reset()
+                    state["vad"].reset()
+                    state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                    state["smart_turn_cooldown"] = 0
+                    continue
+
+                print(f"\n📝 Final Transcript (failsafe):\n {transcript}")
+
+                agent_room_ref = rooms.get(room_name)
+                if agent_room_ref:
+                    await agent_room_ref.local_participant.publish_data(
+                        json.dumps({
+                            "event": "turn_end",
+                            "ts": time.time(),
+                            "transcript": transcript
+                        }).encode(),
+                        reliable=True,
+                    )
+
+                async with state["tts_lock"]:
+                    buffer.reset()
+                    progressive_stt.reset()
+                    state["vad"].reset()
+                    state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                    state["smart_turn_cooldown"] = 0
+
+                    try:
+                        stream_id = f"{room_name}:{time.time_ns()}"
+                        async def on_question_update(text: str, is_final: bool):
+                            await publish_new_question(room_name, text, stream_id=stream_id, is_final=is_final)
+
+                        await voice_agent.handle_turn(
+                            transcript,
+                            turn_start_time,
+                            on_question_update=on_question_update,
+                        )
+
+                        if voice_agent.interview_engine.interview_end and not state.get("interview_end_sent", False):
+                            state["interview_end_sent"] = True
+                            await publish_interview_end(room_name)
+                    except Exception as e:
+                        print(f"⚠️ Failsafe turn handling error: {e}")
+                    finally:
+                        buffer.reset()
+                        progressive_stt.reset()
+                        state["vad"].reset()
+                        state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                        state["smart_turn_cooldown"] = 0
+                        state["post_tts_cooldown_until"] = asyncio.get_event_loop().time() + 0.5
+                        state["tts_busy"] = False
+                continue
+
             if buffer.should_check_turn() and state["smart_turn_cooldown"] <= 0:
                 state["smart_turn_cooldown"] = 25  # re-check after 25 more silence frames (~250ms at 10ms/frame)
+
+                # RMS gate: reject acoustically silent buffers (echo/noise only)
+                turn_audio = buffer.get_full_turn_audio()
+                if rms_energy(turn_audio) < RMS_SILENCE_THRESHOLD:
+                    print("⚠️ Audio too quiet (RMS below threshold), skipping SmartTurn")
+                    buffer.reset()
+                    progressive_stt.reset()
+                    state["vad"].reset()
+                    state["vad_buffer"] = np.zeros(0, dtype=np.float32)
+                    state["smart_turn_cooldown"] = 0
+                    continue
 
                 audio_8s = buffer.get_audio_for_smart_turn()
                 is_complete, prob = smart_turn.is_end_of_turn(audio_8s)
@@ -678,6 +790,11 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
 
                 turn_start_time = asyncio.get_event_loop().time()
                 print(f"🟢 SmartTurn confirmed end of turn (p={prob:.3f})")
+
+                # IMMEDIATELY block further audio processing to prevent
+                # frames leaking between turn confirmation and TTS start
+                state["tts_busy"] = True
+
                 transcript = await progressive_stt.finalize(buffer)
 
                 if not is_valid_transcript(transcript):
@@ -742,6 +859,10 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                         state["vad"].reset()
                         state["vad_buffer"] = np.zeros(0, dtype=np.float32)
                         state["smart_turn_cooldown"] = 0
+
+                        # Post-TTS cooldown: ignore audio for 500ms to let
+                        # mic AGC settle and TTS echo tail dissipate
+                        state["post_tts_cooldown_until"] = asyncio.get_event_loop().time() + 0.5
                         
                         state["tts_busy"] = False
             elif state["smart_turn_cooldown"] > 0:
