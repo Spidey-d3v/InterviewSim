@@ -36,6 +36,10 @@ def predict_endpoint(audio_array):
         - probability: Probability of completion (sigmoid output)
     """
 
+    # Guard: reject NaN/Inf audio
+    if np.isnan(audio_array).any() or np.isinf(audio_array).any():
+        return {"prediction": 0, "probability": 0.0}
+
     # Truncate to 8 seconds (keeping the end) or pad to 8 seconds
     audio_array = truncate_audio_to_last_n_seconds(audio_array, n_seconds=8)
 
@@ -59,6 +63,10 @@ def predict_endpoint(audio_array):
 
     # Extract probability (ONNX model returns sigmoid probabilities)
     probability = outputs[0][0].item()
+
+    # Guard: reject NaN/Inf model output
+    if not np.isfinite(probability):
+        return {"prediction": 0, "probability": 0.0}
 
     # Make prediction (1 for Complete, 0 for Incomplete)
     prediction = 1 if probability > 0.5 else 0
