@@ -27,7 +27,7 @@ export default function DashboardClient({ sessions, profile, userId }: Dashboard
       <Sidebar />
       
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative custom-scrollbar">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0 relative custom-scrollbar">
         {/* Animated Background Accents */}
         <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
           <div className="absolute top-[-10%] right-[-5%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[120px]" />

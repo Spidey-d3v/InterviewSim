@@ -62,7 +62,7 @@ export const getChunkGazeCounts = (chunk: ChunkResult): { focused: number; total
   const summary = chunk.gaze_summary;
   if (summary && summary.total_frames > 0) {
     return {
-      focused: summary.looking_forward + summary.looking_left + summary.looking_right,
+      focused: summary.looking_forward,
       total: summary.total_frames,
     };
   }
@@ -70,7 +70,7 @@ export const getChunkGazeCounts = (chunk: ChunkResult): { focused: number; total
   const total = chunk.gaze_data.length;
   const focused = chunk.gaze_data.filter((e) => {
     const s = (e.status || '').toLowerCase();
-    return !s.includes('away') && (s.includes('forward') || s.includes('left') || s.includes('right') || s.includes('down'));
+    return s.includes('forward');
   }).length;
   return { focused, total };
 };

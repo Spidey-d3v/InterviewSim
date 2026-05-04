@@ -99,12 +99,22 @@ export default function ResultsModal({
     };
 
     // 1. Calculations
-    const allGaze = chunkResults.flatMap((c) => c.gaze_data);
-    const totalGaze = allGaze.length;
-    const focusedGaze = allGaze.filter((e) => {
-      const s = (e.status || '').toLowerCase();
-      return !s.includes('away') && (s.includes('forward') || s.includes('left') || s.includes('right') || s.includes('down'));
-    }).length;
+    let totalGaze = 0;
+    let focusedGaze = 0;
+
+    chunkResults.forEach((c) => {
+      if (c.gaze_summary) {
+        totalGaze += c.gaze_summary.total_frames || 0;
+        focusedGaze += (c.gaze_summary.looking_forward || 0);
+      } else if (c.gaze_data && c.gaze_data.length > 0) {
+        totalGaze += c.gaze_data.length;
+        focusedGaze += c.gaze_data.filter((e) => {
+          const s = (e.status || '').toLowerCase();
+          return s.includes('forward');
+        }).length;
+      }
+    });
+
     const focusPct = totalGaze > 0 ? (focusedGaze / totalGaze) * 100 : 0;
 
     const voiceVals = chunkResults.map(c => c.voice_analysis?.score).filter((v): v is number => typeof v === 'number');

@@ -31,7 +31,8 @@ create index if not exists idx_interview_sessions_completed_at
 	on public.interview_sessions (completed_at desc);
 
 alter table public.interview_sessions
-	add column if not exists overall_gaze_distribution jsonb not null default '{"forward":0,"left":0,"right":0,"down":0,"away":0}'::jsonb;
+	add column if not exists overall_gaze_distribution jsonb not null default '{"forward":0,"left":0,"right":0,"down":0,"away":0}'::jsonb,
+	add column if not exists llm_evaluation_json jsonb null;
 
 alter table public.interview_sessions
 	drop column if exists overall_gaze_forward_pct,
