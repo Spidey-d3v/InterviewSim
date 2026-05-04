@@ -33,8 +33,6 @@ class VoiceWav2VecModel(nn.Module):
         self.output = nn.Linear(embed_dim, 1)
 
     def forward(self, input_values):
-
-        # input_values: [B, T]
         outputs = self.wav2vec(input_values)
         hidden_states = outputs.last_hidden_state  # [B, T', 768]
 
@@ -43,5 +41,8 @@ class VoiceWav2VecModel(nn.Module):
 
         embedding = self.regressor(pooled)  # [B, embed_dim]
         score = self.output(embedding)      # [B, 1]
+        
+        # Apply sigmoid to scale to [0, 1] while preserving relative differences
+        score = torch.sigmoid(score.squeeze(-1))
 
-        return score.squeeze(-1), embedding
+        return score, embedding
