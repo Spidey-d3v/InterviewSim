@@ -1,4 +1,4 @@
-﻿import cv2
+import cv2
 import numpy as np
 import os
 import mediapipe as mp
@@ -88,8 +88,18 @@ calibration_offset_pitch = 0
 # 0 = waiting for center, 1 = waiting for left edge, 2 = done
 calib_step = 0
 
-# Buffers to store recent gaze data for smoothing
+# Buffers for temporal smoothing
 combined_gaze_directions = deque(maxlen=filter_length)
+iris_smooth_l = deque(maxlen=3) # Low latency smoothing for iris
+iris_smooth_r = deque(maxlen=3)
+
+def get_eyelid_distance(lm):
+    """Calculates the normalized distance between upper and lower eyelids"""
+    # Left eye: 159 (top), 145 (bottom)
+    # Right eye: 386 (top), 374 (bottom)
+    l_dist = math.sqrt((lm[159].x - lm[145].x)**2 + (lm[159].y - lm[145].y)**2)
+    r_dist = math.sqrt((lm[386].x - lm[374].x)**2 + (lm[386].y - lm[374].y)**2)
+    return (l_dist + r_dist) / 2
 
 # reference matrices to fix coordinate flipping issue
 # These help keep the axes consistent from frame to frame by stabilizing eigenvector directions
@@ -1442,10 +1452,10 @@ def _run_interactive(args):
         if not HEADLESS_MODE:
             cv2.imshow("Integrated Eye Tracking", frame)
 
-            # Minimize windows after first frame is shown
-            if not windows_minimized:
-                minimize_cv2_windows()
-                windows_minimized = True
+            # Minimize windows after first frame is shown (Disabled for local debugging)
+            # if not windows_minimized:
+            #     minimize_cv2_windows()
+            #     windows_minimized = True
 
         # Handle keyboard input
         if keyboard.is_pressed('f7'):
@@ -1457,7 +1467,7 @@ def _run_interactive(args):
         _calib_wait = 0.5 if args.video else 3.0
         if not auto_calibrated and not (left_sphere_locked and right_sphere_locked):
             elapsed_time = virtual_time - auto_calibration_start_time
-            if elapsed_time >= _calib_wait:  # Wait before auto-calibrating
+            if elapsed_time >= _calib_wait and results.multi_face_landmarks:  # Wait before auto-calibrating
                 current_nose_scale = compute_scale(nose_points_3d)
                 # Lock LEFT eye
                 left_sphere_local_offset = R_final.T @ (iris_3d_left - head_center)
