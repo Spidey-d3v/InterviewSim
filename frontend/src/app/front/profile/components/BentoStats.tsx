@@ -24,6 +24,26 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
   
   const totalQuestions = sessions.reduce((acc, s) => acc + (s.total_questions || 0), 0);
   
+  // Aggregate filler words across all sessions
+  const globalFillers: Record<string, number> = {};
+  sessions.forEach(s => {
+    const evalData = s.llm_evaluation_json;
+    if (evalData) {
+      Object.values(evalData).forEach((phase: any) => {
+        if (phase.filler_words) {
+          Object.entries(phase.filler_words).forEach(([word, count]) => {
+            const w = word.toLowerCase();
+            globalFillers[w] = (globalFillers[w] || 0) + (count as number);
+          });
+        }
+      });
+    }
+  });
+
+  const topFillers = Object.entries(globalFillers)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 3);
+
   // Data for Sparklines (last 10 sessions)
   const confidenceTrend = sessions.slice(0, 10).reverse().map(s => ({
     value: (s.overall_confidence_score || 0) * 100
@@ -108,23 +128,50 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
         </div>
       </motion.div>
 
-      {/* Experience / Quick Stats */}
-      <motion.div variants={item} className="bg-gradient-to-br from-gray-800/20 to-black/40 border border-white/5 rounded-[2rem] p-6 backdrop-blur-xl">
-        <div className="flex justify-between items-start mb-6">
-          <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-400">
-            <Zap size={20} />
-          </div>
-          <div className="text-right">
-             <p className="text-lg font-bold text-white leading-none">{totalQuestions}</p>
-             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Questions Taken</p>
-          </div>
-        </div>
-        <div className="space-y-2">
-           <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
-             <div className="h-full bg-yellow-500 w-[65%]" />
-           </div>
-           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">65% to next career level</p>
-        </div>
+      {/* Experience or Filler Words */}
+      <motion.div variants={item} className="bg-gradient-to-br from-gray-800/20 to-black/40 border border-white/5 rounded-[2rem] p-6 backdrop-blur-xl group">
+        {topFillers.length > 0 ? (
+          <>
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center text-red-400 group-hover:scale-110 transition-transform">
+                <Users size={20} />
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Verbal Habit</p>
+                <p className="text-xs font-bold text-red-400">Attention Needed</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Top Filler Words</p>
+              <div className="flex flex-wrap gap-2">
+                {topFillers.map(([word, count]) => (
+                  <div key={word} className="px-2 py-1 bg-white/5 rounded-lg border border-white/10 flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-gray-300 capitalize">{word}</span>
+                    <span className="text-[10px] font-black text-red-500">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex justify-between items-start mb-6">
+              <div className="w-10 h-10 bg-yellow-500/10 rounded-xl flex items-center justify-center text-yellow-400">
+                <Zap size={20} />
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold text-white leading-none">{totalQuestions}</p>
+                <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Questions Taken</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                <div className="h-full bg-yellow-500 w-[65%]" />
+              </div>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tighter">65% to next career level</p>
+            </div>
+          </>
+        )}
       </motion.div>
     </motion.div>
   );

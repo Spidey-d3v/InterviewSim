@@ -55,6 +55,34 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
     { label: 'Voice', val: session.overall_voice_score, icon: MessageSquare, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   ];
 
+  // Aggregate filler words
+  const aggregatedFillers: Record<string, number> = {};
+  if (phaseEvaluations) {
+    Object.values(phaseEvaluations).forEach((data: any) => {
+      if (data.filler_words) {
+        Object.entries(data.filler_words).forEach(([word, count]) => {
+          aggregatedFillers[word.toLowerCase()] = (aggregatedFillers[word.toLowerCase()] || 0) + (count as number);
+        });
+      }
+    });
+  }
+
+  const highlightFillerWords = (text: string) => {
+    if (!text || Object.keys(aggregatedFillers).length === 0) return text;
+    
+    // Create a regex for all filler words
+    const words = Object.keys(aggregatedFillers).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`\\b(${words.join('|')})\\b`, 'gi');
+    
+    const parts = text.split(regex);
+    return parts.map((part, i) => {
+      if (aggregatedFillers[part.toLowerCase()] !== undefined) {
+        return <span key={i} className="text-red-500 font-bold underline decoration-red-500/30">{part}</span>;
+      }
+      return part;
+    });
+  };
+
   return (
     <>
       <motion.div 
@@ -178,6 +206,34 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
             </div>
           </section>
 
+          {/* Filler Words Analysis */}
+          {Object.keys(aggregatedFillers).length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-6">
+                <MessageSquare size={18} className="text-red-500" />
+                <h3 className="text-lg font-bold tracking-tight uppercase">Filler Word Analysis</h3>
+              </div>
+              <div className="bg-red-500/5 border border-red-500/20 rounded-3xl p-6">
+                <p className="text-xs text-gray-400 mb-4 leading-relaxed">
+                  We detected several filler words in your responses. These often indicate moments of hesitation or stalling. 
+                  Try pausing instead of using these placeholders to sound more authoritative.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  {Object.entries(aggregatedFillers)
+                    .sort(([, a], [, b]) => b - a)
+                    .map(([word, count]) => (
+                      <div key={word} className="px-4 py-2 bg-white/5 rounded-2xl border border-white/10 flex items-center gap-3 group hover:border-red-500/30 transition-colors">
+                        <span className="text-sm font-bold text-white capitalize">{word}</span>
+                        <span className="w-6 h-6 rounded-lg bg-red-500/20 flex items-center justify-center text-[10px] font-black text-red-400">
+                          {count}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Performance Log */}
           <section>
             <div className="flex items-center justify-between mb-6">
@@ -188,13 +244,21 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
             <div className="space-y-3">
               {questions.map((q: any, idx: number) => (
                 <div key={idx} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 hover:border-purple-500/30 transition-colors cursor-default group">
-                   <div className="flex justify-between items-start gap-4">
+                   <div className="flex justify-between items-start gap-4 mb-3">
                       <div className="space-y-1">
                         <p className="text-[10px] font-bold uppercase text-purple-500/70 tracking-widest">{q.phase || 'General'}</p>
                         <p className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">{q.question_text}</p>
                       </div>
                       <ArrowUpRight size={14} className="text-gray-600 group-hover:text-purple-500" />
                    </div>
+                   {q.candidate_answer && (
+                     <div className="mt-4 pt-4 border-t border-white/5">
+                        <p className="text-[10px] font-bold uppercase text-gray-500 mb-2 tracking-widest">Candidate Answer</p>
+                        <p className="text-sm text-gray-400 leading-relaxed italic">
+                          "{highlightFillerWords(q.candidate_answer)}"
+                        </p>
+                     </div>
+                   )}
                 </div>
               ))}
             </div>

@@ -220,6 +220,30 @@ export default function ResultsModal({
         y += boxHeight + 15;
       }
 
+      // --- ADDED: Filler Words Summary ---
+      if (pScores?.filler_words && Object.keys(pScores.filler_words).length > 0) {
+        ensureSpace(60);
+        pdf.setFillColor(254, 242, 242);
+        pdf.rect(margin + 15, y, contentWidth - 30, 45, 'F');
+        pdf.setDrawColor(239, 68, 68);
+        pdf.setLineWidth(3);
+        pdf.line(margin + 15, y, margin + 15, y + 45);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(153, 27, 27);
+        pdf.text('VERBAL HABITS (FILLER WORDS)', margin + 25, y + 15);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(185, 28, 28);
+        const fillers = Object.entries(pScores.filler_words)
+          .map(([w, c]) => `${w.toUpperCase()}: ${c}`)
+          .join('  |  ');
+        pdf.text(fillers, margin + 25, y + 30);
+        y += 60;
+      }
+
       // --- ADDED: Question Detail & Transcript ---
       phaseQs.forEach((q) => {
         ensureSpace(80);

@@ -38,6 +38,7 @@ export interface InterviewPhaseScores {
   metrics?: Record<string, number>;
   advice?: string[];
   overall?: number;
+  filler_words?: Record<string, number>;
 }
 
 export type QuestionStatus = 'waiting' | 'processing' | 'streaming' | 'ready';

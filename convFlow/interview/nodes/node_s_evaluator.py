@@ -27,7 +27,12 @@ Evaluate on:
 2. THREE phase-specific metrics for this phase:
 - {metrics_str}
 
-3. Provide PROFESSIONAL INTERVIEW ADVICE:
+3. Identify context-aware FILLER WORDS:
+- Pick out words that the candidate uses excessively or as placeholders (e.g., "um", "uh", "like", "you know", "actually").
+- Also include redundant usage of "and" or "but" if used to stall for time.
+- Return a dictionary of word: count.
+
+4. Provide PROFESSIONAL INTERVIEW ADVICE:
 - Give 3–5 concise, actionable suggestions
 - Focus on how the candidate can improve their responses
 - Be specific (not generic)
@@ -38,6 +43,9 @@ Return STRICT JSON:
     "overall": int,
     "metrics": {{
         {', '.join([f'"{m}": int' for m in metrics])}
+    }},
+    "filler_words": {{
+        "word": int
     }},
     "advice": [
         "string",
@@ -69,6 +77,7 @@ Return STRICT JSON:
             return {
                 "overall": parsed.get("overall", 0),
                 "metrics": filtered_metrics,
+                "filler_words": parsed.get("filler_words", {}),
                 "advice": advice
             }
     except:
@@ -77,5 +86,6 @@ Return STRICT JSON:
     return {
         "overall": 0,
         "metrics": {k: 0 for k in metrics},
+        "filler_words": {},
         "advice": []
     }

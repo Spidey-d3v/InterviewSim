@@ -7,6 +7,7 @@ interface PhaseEvaluation {
   overall: number;
   metrics: Record<string, number>;
   advice?: string[];
+  filler_words?: Record<string, number>;
 }
 
 export interface InterviewMetricsV2 {
@@ -144,6 +145,53 @@ const styles = StyleSheet.create({
     lineHeight: 1.4 
   },
 
+  fillerBox: {
+    marginTop: 15,
+    padding: 15,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    borderLeft: 3,
+    borderLeftColor: '#EF4444'
+  },
+  fillerTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#991B1B',
+    marginBottom: 8,
+    textTransform: 'uppercase'
+  },
+  fillerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10
+  },
+  fillerItem: {
+    fontSize: 8,
+    color: '#B91C1C',
+    backgroundColor: '#FEE2E2',
+    padding: '3 6',
+    borderRadius: 4
+  },
+
+  questionBlock: {
+    marginTop: 10,
+    padding: 10,
+    borderBottom: 1,
+    borderBottomColor: '#F3F4F6'
+  },
+  questionText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4
+  },
+  answerText: {
+    fontSize: 8,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    lineHeight: 1.4
+  },
+
   footer: {
     position: 'absolute',
     bottom: 30,
@@ -172,6 +220,15 @@ export const ReportPDF = ({ session, metrics }: ReportPDFProps) => {
     year: 'numeric',
     month: 'long',
     day: 'numeric'
+  });
+
+  const aggregatedFillers: Record<string, number> = {};
+  Object.values(metrics.phase_evaluations).forEach(data => {
+    if (data.filler_words) {
+      Object.entries(data.filler_words).forEach(([word, count]) => {
+        aggregatedFillers[word.toLowerCase()] = (aggregatedFillers[word.toLowerCase()] || 0) + (count as number);
+      });
+    }
   });
 
   return (
@@ -224,9 +281,43 @@ export const ReportPDF = ({ session, metrics }: ReportPDFProps) => {
           </View>
         ))}
 
+        {/* Filler Words Analysis */}
+        {Object.keys(aggregatedFillers).length > 0 && (
+          <View wrap={false}>
+            <Text style={styles.sectionTitle}>Filler Word Analysis</Text>
+            <View style={styles.fillerBox}>
+              <Text style={styles.fillerTitle}>Identified Verbal Habits</Text>
+              <View style={styles.fillerRow}>
+                {Object.entries(aggregatedFillers)
+                  .sort(([, a], [, b]) => b - a)
+                  .map(([word, count]) => (
+                    <Text key={word} style={styles.fillerItem}>
+                      {word.toUpperCase()}: {count}
+                    </Text>
+                  ))}
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Question Log */}
+        {metrics.questions && metrics.questions.length > 0 && (
+          <View>
+            <Text style={styles.sectionTitle}>Full Interview Log</Text>
+            {metrics.questions.map((q, i) => (
+              <View key={i} style={styles.questionBlock} wrap={false}>
+                <Text style={styles.questionText}>Q: {q.question_text}</Text>
+                {q.candidate_answer && (
+                  <Text style={styles.answerText}>A: "{q.candidate_answer}"</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>© 2026 InterviewAI Behavioral Analytics Platform</Text>
-          <Text style={styles.footerText}>Confidential Report • Ref: {session.id.slice(0, 8)}</Text>
+          <Text style={styles.footerText}>Confidential Report • Ref: {session.session_id.slice(0, 8)}</Text>
         </View>
       </Page>
     </Document>
