@@ -528,6 +528,28 @@ async def token(
             
             state["repeat_task"] = asyncio.create_task(re_ask())
 
+        if event == "end_interview":
+          print(f"🛑 User explicitly ended interview for {room_name}")
+          async def trigger_end():
+            engine = interview_engines.get(room_name)
+            if engine:
+              # Evaluate the current phase before ending
+              current_phase = engine.state.get("phase")
+              transcript = engine.state.get("phase_transcript", "")
+              
+              if transcript.strip():
+                # Launch evaluation for the aborted current phase
+                eval_task = asyncio.create_task(
+                  engine._run_evaluator(current_phase, transcript)
+                )
+                engine.eval_tasks.append(eval_task)
+                eval_task.add_done_callback(lambda t: engine.eval_tasks.remove(t) if t in engine.eval_tasks else None)
+              
+              engine.interview_end = True
+              await publish_interview_end(room_name)
+          
+          asyncio.create_task(trigger_end())
+
       except Exception as e:
         print(f"⚠️ Error handling data packet: {e}")
 
@@ -624,9 +646,16 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             # Fallback for missing columns
             err_msg = str(db_err)
             if "llm_evaluation_json" in err_msg or "PGRST204" in err_msg:
-                print("⚠️ Supabase column 'llm_evaluation_json' missing. Retrying without it...")
-                row.pop("llm_evaluation_json", None)
-                supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+                print("⚠️ Supabase column 'llm_evaluation_json' missing. Retrying with 'llm_evaluation'...")
+                if "llm_evaluation_json" in row:
+                    row["llm_evaluation"] = row.pop("llm_evaluation_json")
+                try:
+                    supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+                except Exception as db_err2:
+                    print(f"⚠️ Retrying without evaluation columns: {db_err2}")
+                    row.pop("llm_evaluation", None)
+                    row.pop("llm_evaluation_json", None)
+                    supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
             else:
                 raise db_err
 

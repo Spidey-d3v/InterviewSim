@@ -120,8 +120,8 @@ export default function ResultsModal({
     const voiceVals = chunkResults.map(c => c.voice_analysis?.score).filter((v): v is number => typeof v === 'number');
     const confVals = chunkResults.flatMap(c => c.predictions.map(p => p.confidence)).filter((v): v is number => typeof v === 'number');
 
-    const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((a, b) => a + b, 0) / voiceVals.length) * 100 : 0;
-    const avgConf = confVals.length > 0 ? (confVals.reduce((a, b) => a + b, 0) / confVals.length) * 100 : 0;
+    const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((a, b) => a + b, 0) / voiceVals.length) * 10 : 0;
+    const avgConf = confVals.length > 0 ? (confVals.reduce((a, b) => a + b, 0) / confVals.length) * 10 : 0;
 
     // 2. Render Header
     drawHeader();
@@ -131,8 +131,8 @@ export default function ResultsModal({
     const cardHeight = 60;
     
     [
-      { label: 'CONFIDENCE', val: `${Math.round(avgConf)}%` },
-      { label: 'COMMUNICATION', val: `${Math.round(avgVoice)}%` },
+      { label: 'CONFIDENCE', val: `${avgConf.toFixed(1)}/10` },
+      { label: 'COMMUNICATION', val: `${avgVoice.toFixed(1)}/10` },
     ].forEach((card, i) => {
       const x = margin + i * (cardWidth + 10);
       pdf.setFillColor(COLORS.BG_GREY[0], COLORS.BG_GREY[1], COLORS.BG_GREY[2]);

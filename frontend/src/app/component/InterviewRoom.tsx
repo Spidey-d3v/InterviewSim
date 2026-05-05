@@ -53,6 +53,7 @@ export default function InterviewRoom() {
   const [showCalibration, setShowCalibration] = useState(true);
   const [interviewStarted, setInterviewStarted] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const showResultsRef = useRef(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -73,6 +74,9 @@ export default function InterviewRoom() {
   const [sessionPersisted, setSessionPersisted] = useState(false);
   const [sessionPersistError, setSessionPersistError] = useState<string | null>(null);
   const [finalScores, setFinalScores] = useState<Record<string, InterviewPhaseScores> | null>(null);
+
+  // -- Refs for circular dependency --
+  const disconnectRoomRef = useRef<() => void>(() => {});
 
   // -- Core Logic Hooks --
   const {
@@ -109,6 +113,24 @@ export default function InterviewRoom() {
     },
     onError: (msg) => console.error('[Recorder]', msg),
   });
+
+  const handleInterviewEnd = useCallback(async (fScores?: Record<string, unknown>) => {
+    console.log("🏁 Finalizing interview session...");
+    if (fScores) setFinalScores(fScores as Record<string, InterviewPhaseScores>);
+    
+    // Stop recording and disconnect
+    if (isChunkRecording) stopRecorder();
+    disconnectRoomRef.current();
+    releaseStream();
+    clearLiveKitToken();
+
+    if (document.fullscreenElement) {
+      try { await document.exitFullscreen(); } catch(e) {}
+    }
+    
+    setShowResults(true);
+    showResultsRef.current = true;
+  }, [isChunkRecording, releaseStream, stopRecorder]);
 
   // -- Callbacks for Child Components --
   const handleNewQuestion = useCallback((questionText: string, meta?: QuestionMeta) => {
@@ -241,23 +263,27 @@ export default function InterviewRoom() {
     if (endingInterviewRef.current) return;
     endingInterviewRef.current = true;
 
-    // Phase 1 Fix: Stop everything immediately
+    if (interviewStarted) {
+      console.log("🛑 Requesting early interview end...");
+      await sendData({ event: 'end_interview' });
+      
+      // Fallback: if backend doesn't respond in 15s, force cleanup
+      setTimeout(() => {
+        if (!showResultsRef.current) {
+          console.log("⏰ Early end timeout: forcing cleanup");
+          void handleInterviewEnd();
+        }
+      }, 15000);
+      return;
+    }
+
+    // Standard exit for non-started interviews
     disconnectRoom();
     releaseStream();
-    clearLiveKitToken(); // Clears cached token so next interview creates a new room
-
+    clearLiveKitToken();
     if (document.fullscreenElement) await document.exitFullscreen();
     if (isChunkRecording) stopRecorder();
-    if (interviewStarted) {
-      setShowResults(true);
-    } else {
-      router.push('/');
-    }
-  };
-
-  const handleInterviewEnd = (fScores?: Record<string, unknown>) => {
-    if (fScores) setFinalScores(fScores as Record<string, InterviewPhaseScores>);
-    void handleLeave();
+    router.push('/');
   };
 
   // -- Lifecycle Effects --
@@ -296,6 +322,10 @@ export default function InterviewRoom() {
     stream: cameraStream,
     isAiSpeaking: questionStatus === 'streaming' || questionStatus === 'processing' || isPaused,
   });
+
+  useEffect(() => {
+    disconnectRoomRef.current = disconnectRoom;
+  }, [disconnectRoom]);
 
   const togglePause = useCallback(async () => {
     const nextPaused = !isPaused;

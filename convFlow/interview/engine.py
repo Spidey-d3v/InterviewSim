@@ -52,14 +52,11 @@ class InterviewEngine:
         return self.state.get("last_question")
 
     async def _run_evaluator(self, phase, transcript):
-        task = asyncio.create_task(node_s_evaluator(self.llm, phase, transcript))
-        self.eval_tasks.append(task)
         try:
-            result = await task
+            result = await node_s_evaluator(self.llm, phase, transcript)
             self.state["candidate_profile"]["scores"][phase] = result
-        finally:
-            if task in self.eval_tasks:
-                self.eval_tasks.remove(task)
+        except Exception as e:
+            print(f"Evaluation error for {phase}: {e}")
 
     async def _update_summary_async(self, transcript: str):
         """Runs rolling summarizer in background to prevent blocking audio latency."""
@@ -229,9 +226,11 @@ class InterviewEngine:
                     self.interview_end = True
 
                 # -------------------- ASYNC EVALUATION --------------------
-                asyncio.create_task(
+                eval_task = asyncio.create_task(
                     self._run_evaluator(old_phase, transcript)
                 )
+                self.eval_tasks.append(eval_task)
+                eval_task.add_done_callback(lambda t: self.eval_tasks.remove(t) if t in self.eval_tasks else None)
 
                 # -------------------- UPDATE SUMMARY --------------------
                 # Run asynchronously so we don't block the next turn's audio response
