@@ -114,7 +114,7 @@ export function InterviewMainDisplay({
   onNext,
 }: MainDisplayProps) {
   return (
-    <div className="flex-1 flex items-center justify-center p-6 relative">
+    <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-y-auto">
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] opacity-50" />
       </div>
@@ -146,27 +146,27 @@ export function InterviewMainDisplay({
           <div className="absolute top-4 right-4 px-3 py-2 bg-gradient-to-br from-purple-500/80 to-pink-500/80 backdrop-blur-sm rounded-lg border border-white/30 text-xs font-medium">
             {interviewStarted ? `AI Monitoring • Phase: ${currentPhase.toUpperCase().replace('_', ' ')}` : 'Calibrating'}
           </div>
-
-          {interviewStarted && (
-            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/90 to-transparent">
-              <div className="max-w-3xl mx-auto">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-purple-400 font-mono uppercase tracking-wider">
-                    {questionStatus === 'streaming' ? 'AI is speaking...' : `Question ${questionIndex + 1} of ${aiQuestions.length || 1}`}
-                  </span>
-                  <div className="flex gap-2">
-                    <button onClick={onPrev} disabled={questionIndex === 0} className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-20 transition-all">← Prev</button>
-                    <button onClick={onNext} disabled={questionIndex >= aiQuestions.length - 1} className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-20 transition-all">Next →</button>
-                  </div>
-                </div>
-                <p className="text-lg text-white font-medium drop-shadow-md">
-                   {streamingQuestion || aiQuestions[questionIndex] || (questionStatus === 'processing' ? 'Thinking...' : 'Introduce yourself.')}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      {interviewStarted && (
+        <div className="w-full max-w-4xl p-6 mt-6 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-sm">
+          <div className="max-w-3xl mx-auto">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-purple-400 font-mono uppercase tracking-wider">
+                {questionStatus === 'streaming' ? 'AI is speaking...' : `Question ${questionIndex + 1} of ${aiQuestions.length || 1}`}
+              </span>
+              <div className="flex gap-2">
+                <button onClick={onPrev} disabled={questionIndex === 0} className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-20 transition-all">← Prev</button>
+                <button onClick={onNext} disabled={questionIndex >= aiQuestions.length - 1} className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-20 transition-all">Next →</button>
+              </div>
+            </div>
+            <p className="text-xl text-white font-medium">
+                {streamingQuestion || aiQuestions[questionIndex] || (questionStatus === 'processing' ? 'Thinking...' : 'Introduce yourself.')}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

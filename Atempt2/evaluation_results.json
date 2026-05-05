@@ -1,0 +1,50 @@
+{
+    "evaluation_summary": {
+        "project_video": "Atempt2",
+        "project_audio": "Voice_Evaluation_PRJ3",
+        "best_epoch": 6,
+        "total_epochs": 10
+    },
+    "video_model_details": {
+        "source_script": "Atempt2/src/training/train_single_target.py",
+        "target_column": "confidence_score",
+        "loss_function": "0.9 * PairwiseRankingLoss + 0.1 * HuberLoss",
+        "freeze_strategy": "Encoder frozen for epochs 1-4",
+        "metrics": {
+            "peak_spearman": 0.74,
+            "epoch_history": [
+                0.31,
+                0.38,
+                0.44,
+                0.49,
+                0.65,
+                0.74,
+                0.73,
+                0.725,
+                0.72,
+                0.718
+            ]
+        }
+    },
+    "audio_model_details": {
+        "source_script": "Voice_Evaluation_PRJ3/src/training/train_voice_wav2vec.py",
+        "target_column": "score (voice)",
+        "loss_function": "HuberLoss (delta=1.0)",
+        "freeze_strategy": "None (Full training)",
+        "metrics": {
+            "peak_spearman": 0.61,
+            "epoch_history": [
+                0.22,
+                0.29,
+                0.37,
+                0.45,
+                0.54,
+                0.61,
+                0.6,
+                0.59,
+                0.585,
+                0.58
+            ]
+        }
+    }
+}
