@@ -195,6 +195,10 @@ The backbone of all model training and evaluation.
 git clone https://github.com/your-org/lattice.git
 cd lattice
 
+# Copy and configure environment variables
+cp .env.example .env
+# Open .env and fill in the required values
+
 # Fire everything up
 .\start-system.ps1
 ```
