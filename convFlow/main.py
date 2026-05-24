@@ -8,6 +8,12 @@ from pydantic import BaseModel, Field
 from livekit import rtc
 from livekit.rtc import Room, AudioStream, RoomOptions, RtcConfiguration, IceTransportType
 from livekit.api import AccessToken, VideoGrants
+import os
+
+# Suppress HuggingFace verbosity before importing ML libraries
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from audio.buffer import TurnBuffer
 from audio.vad import SileroVAD
 from stt.whisper_stt import WhisperSTT
@@ -40,6 +46,28 @@ API_KEY = os.getenv("LIVEKIT_API_KEY", "devkey")
 API_SECRET = os.getenv("LIVEKIT_API_SECRET", "APISECRETdevkey1234567890ABCDEFG")
 
 app = FastAPI()
+
+@app.on_event("startup")
+async def warmup_ollama():
+    print("🔥 Warming up Ollama model...")
+    url = "http://localhost:11434/api/generate"
+    payload = {
+        "model": "gemma3:1b",  # Ensures this specific model is loaded
+        "prompt": "Warmup",
+        "stream": False,
+        "keep_alive": "1h",    # Keep in VRAM for an hour to prevent cold starts
+        "options": {"num_predict": 2}
+    }
+    try:
+        # High timeout because cold loading a multi-GB model can take time
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            response = await client.post(url, json=payload)
+            if response.status_code == 200:
+                print("✅ Ollama model loaded into VRAM and warmed up successfully.")
+            else:
+                print(f"⚠️ Ollama warmup returned unexpected status: {response.status_code}")
+    except Exception as e:
+        print(f"⚠️ Ollama warmup failed (ensure Ollama is running): {e}")
 
 # -------------------- Initialization --------------------
 
@@ -580,24 +608,26 @@ async def parse_resume(
         doc.close()
 
         # 2. AI Parsing
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
+        url = "http://localhost:11434/api/generate"
         
         payload = {
-            "contents": [{
-                "parts": [{
-                    "text": (
-                        "Extract candidate_name (string), skills (list), and experience (list of objects) "
-                        "from this resume. Return ONLY raw JSON with keys: candidate_name, skills, experience. "
-                        f"Resume text: {raw_text}"
-                    )
-                }]
-            }],
-            "generationConfig": {"response_mime_type": "application/json"}
+            "model": "gemma3:1b",
+            "prompt": (
+                "Extract candidate_name (string), skills (list), and experience (list of objects) "
+                "from this resume. Return ONLY raw JSON with keys: candidate_name, skills, experience. "
+                f"Resume text: {raw_text}"
+            ),
+            "stream": False,
+            "format": "json"
         }
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload, timeout=40.0)
-            ai_data = json.loads(response.json()['candidates'][0]['content']['parts'][0]['text'])
+            response = await client.post(url, json=payload, timeout=60.0)
+            if response.status_code != 200:
+                raise Exception(f"Ollama error: {response.text}")
+            
+            result = response.json()
+            ai_data = json.loads(result['response'])
 
         # 3. Database Upsert
         supabase.table("profiles").upsert({
@@ -896,3 +926,4 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                         state["tts_busy"] = False
             elif state["smart_turn_cooldown"] > 0:
                 state["smart_turn_cooldown"] -= 1
+

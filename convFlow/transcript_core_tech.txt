@@ -1,3 +1,8 @@
 
-Interviewer: Absolutely, Gaurav. No problem at all. We can definitely switch gears. Let's move on to the next topic then.
-Candidate: nan Can you assist to the next question?
+Interviewer: “That’s a really interesting starting point. It sounds like you’ve designed a web-based agent focused on streamlining the resume submission process. Essentially, it’s designed to collect information about candidates – your resume, experience, and skills – and then guide you through a series of interactive questions to assess your suitability for the role.”
+Candidate: Correct. That is exactly what it does.
+
+Interviewer: Okay, let’s really dig into this. It’s fantastic to hear about the core functionality of this agent – streamlining the resume submission process. You’ve accurately described it as a web-based system designed to gather candidate information and guide them through a series of questions. It’s a really smart approach to assessing suitability, right?
+
+Now, thinking about the data you’re feeding into this system – the resume, experience, skills – what’s the *most* critical aspect of ensuring the model accurately interprets those details and doesn’t inadvertently introduce bias?  Is there a particular challenge you’ve encountered in the past that’s shaped your design choices so far?
+Candidate: So, most critical part I would say so you can ensure doesn't introduce bias is that we are not grading based on the reason. We are grading based on the user answers and right now it is entirely alert and given so there is some scope of it. Some scope of it preference certain answers over others but we haven't done a in depth study on the arts since that is the more research and of work and not really products, product facing, product facing approach. What we are planning to do is may be have use multi, use multi prompt strategies, multi short prompting. Multi short content to give it a base sign of how it should read the content but right now the content is completely great by the alarm.

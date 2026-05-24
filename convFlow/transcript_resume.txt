@@ -1,3 +1,8 @@
 
-Interviewer: Okay, Gaurav, I understand. We can certainly move on. Let's dive into your experience then. Could you tell me about a specific project you've worked on that you're particularly proud of, especially one that involved machine learning or AI?
-Candidate: nan Can we switch to the next question?
+Interviewer: “That’s a really interesting project – agentikyai systems! It’s fantastic to hear you’re interested in working on projects that have a real-world impact. Can you tell me a bit more about what you’ve been building with it, and what aspects of the agentikyai workflow have been particularly rewarding for you?”
+Candidate: So, I have been building an integration agent which what it does is it.
+
+Interviewer: Okay, let’s start with that.
+
+“Okay, that’s a good starting point. It sounds like you’ve built a foundational integration agent. To help me understand your approach a bit better, could you tell me, in your own words, what the primary purpose of this agent is and what specific functionalities does it currently offer?”
+Candidate: So this agent would, it's a web web based project and it loads up, it asks you to send in your resume. It passes that to extract information about you and then it starts the live interview where it changes question diametri based on your responses and based on the job role and the resume provided and it You may provide it and it has 5 phases introduction, resume, then there is scenario based questions and so on.

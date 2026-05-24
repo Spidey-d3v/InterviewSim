@@ -28,3 +28,6 @@ converted_*.wav
 
 
 cloudflared.exe
+
+*.log
+*.txt
