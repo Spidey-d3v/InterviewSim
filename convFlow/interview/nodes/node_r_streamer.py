@@ -42,6 +42,8 @@ async def node_r_generate_stream(
     - If it's a probe → be concise and targeted
     - If it's a closing/termination → be polite and professional
     Rules:
+    - Ask EXACTLY ONE question. Do not chain multiple questions together.
+    - Keep the output extremely concise and conversational, limiting your response to 1-3 sentences maximum.
     - Do NOT output meta instructions
     - Do NOT mention "context" or "phase"
     - Do NOT sound robotic

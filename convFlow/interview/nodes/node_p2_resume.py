@@ -32,6 +32,8 @@ async def node_p2_resume_based(
         - If answer is short/incomplete/unsure: probe ONCE with a targeted hint based on the resume.
         - If second answer still weak: move to next topic (max 2 follow-ups per topic).
         Rules:
+        - Ask EXACTLY ONE focused question at a time. Do not chain multiple questions.
+        - Keep the question extremely concise, ideally under 2 sentences.
         - NEVER ask generic "tell me about your experience" if specific details are in the Resume Context. Use them!
         - Target depth (implementation, challenges, impact) and explicit relevance to JD.
         Conversation This Phase: if transcript exists, then {transcript} else {"Resume-based questioning has not started yet."}

@@ -33,6 +33,8 @@ async def node_p1_introduction(
          If the interview has not started yet, generate the opening welcome + first intro question only.
          If transcript exists, you may probe for further information if answer seems too short or incomplete.
          Rules:
+         - Ask EXACTLY ONE question at a time.
+         - Keep the opening brief and your response under 2-3 sentences.
          - Combine questions into one smooth opening
          - Do not assume the candidate already answered when interview has not started yet
          Conversation This Phase: {transcript_context}
