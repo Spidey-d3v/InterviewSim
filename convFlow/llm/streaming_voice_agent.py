@@ -59,6 +59,16 @@ class StreamingVoiceAgent:
         self.first_audio_emitted = None
         self.tts_queue = asyncio.Queue()
         self.tts_task_ref = None
+        
+        # Kokoro Voice Rotation
+        self.available_voices = ["af_heart", "af_bella", "af_nicole", "af_sky", "am_adam", "am_michael"]
+        self.voice_index = 0
+
+    def get_next_voice(self) -> str:
+        """Cycle through available voices."""
+        voice = self.available_voices[self.voice_index]
+        self.voice_index = (self.voice_index + 1) % len(self.available_voices)
+        return voice
 
     def stop_tts(self):
         """Immediately stop current speech generation and playback."""
@@ -86,19 +96,20 @@ class StreamingVoiceAgent:
         if on_question_update:
             await on_question_update(question_text, True)
 
-        self.tts_task_ref = asyncio.create_task(self._tts_worker())
+        turn_voice = self.get_next_voice()
+        self.tts_task_ref = asyncio.create_task(self._tts_worker(turn_voice))
         self.tts_queue.put_nowait(question_text)
         self.tts_queue.put_nowait(None) # End signal
         await self.tts_queue.join()
 
-    async def _tts_worker(self):
+    async def _tts_worker(self, turn_voice: str):
         while True:
             chunk = await self.tts_queue.get()
             try:
                 if chunk is None:
                     break
 
-                for audio_chunk in self.tts.synthesize(chunk):
+                for audio_chunk in self.tts.synthesize(chunk, voice=turn_voice):
                     if not self.first_audio_emitted:
                         now = asyncio.get_event_loop().time()
                         print(f"⏱ First Audio Latency: {now - self.turn_start:.3f}s")
@@ -124,7 +135,8 @@ class StreamingVoiceAgent:
         self.turn_start = stt_done_time
         self.first_audio_emitted = False
         chunker = SentenceChunker()
-        self.tts_task_ref = asyncio.create_task(self._tts_worker())
+        turn_voice = self.get_next_voice()
+        self.tts_task_ref = asyncio.create_task(self._tts_worker(turn_voice))
         streamed_question = ""
         last_emit_len = 0
         last_emit_ts = 0.0
