@@ -61,7 +61,7 @@ class StreamingVoiceAgent:
         self.tts_task_ref = None
         
         # Kokoro Voice Rotation
-        self.available_voices = ["af_heart", "af_bella", "af_nicole", "af_sky", "am_adam", "am_michael"]
+        self.available_voices = ["af_heart", "af_bella", "af_sky", "am_adam", "am_michael"]
         self.voice_index = 0
 
     def get_next_voice(self) -> str:
