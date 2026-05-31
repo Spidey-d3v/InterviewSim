@@ -63,6 +63,7 @@ export default function InterviewRoom() {
   const [aiQuestions, setAiQuestions] = useState<string[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questionStatus, setQuestionStatus] = useState<QuestionStatus>('waiting');
+  const [activeSpeaker, setActiveSpeaker] = useState<string | null>(null);
   const [streamingQuestion, setStreamingQuestion] = useState<string | null>(null);
   const [, setActiveQuestionStreamId] = useState<string | null>(null);
   const [currentPhase, setCurrentPhase] = useState<string>('intro');
@@ -133,7 +134,7 @@ export default function InterviewRoom() {
   }, [isChunkRecording, releaseStream, stopRecorder]);
 
   // -- Callbacks for Child Components --
-  const handleNewQuestion = useCallback((questionText: string, meta?: QuestionMeta) => {
+  const handleNewQuestion = useCallback((questionText: string, meta?: QuestionMeta & { speaker_name?: string }) => {
     // The backend sends 'question_text' in the payload, but onNewQuestion 
     // is called with (msg.question_text || msg.text).
     const normalized = questionText?.trim();
@@ -141,6 +142,7 @@ export default function InterviewRoom() {
 
     if (meta?.phase) setCurrentPhase(meta.phase);
     if (meta?.stream_id) setActiveQuestionStreamId(meta.stream_id);
+    if (meta?.speaker_name) setActiveSpeaker(meta.speaker_name);
 
     if (meta?.is_final) {
       setAiQuestions((prev) => {
@@ -376,6 +378,7 @@ export default function InterviewRoom() {
           interviewStarted={interviewStarted} currentPhase={currentPhase} questionStatus={questionStatus}
           streamingQuestion={streamingQuestion} aiQuestions={aiQuestions} questionIndex={questionIndex}
           isChunkRecording={isChunkRecording} isPaused={isPaused}
+          activeSpeaker={activeSpeaker}
           onPrev={() => setQuestionIndex(i => Math.max(0, i - 1))}
           onNext={() => setQuestionIndex(i => Math.min(aiQuestions.length - 1, i + 1))}
         />

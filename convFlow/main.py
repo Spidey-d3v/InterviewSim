@@ -139,6 +139,7 @@ async def publish_new_question(
     payload = {
         "event": "new_question",
         "question_text": question_text.strip(),
+        "speaker_name": state.get("current_interviewer"), # Add active speaker name
         "phase": state.get("phase"),
         "turn_index": state.get("phase_question_count", 0),
         "stream_id": stream_id,
@@ -243,6 +244,15 @@ app.add_middleware(
 
 # -------------------- Token --------------------
 
+AVAILABLE_INTERVIEWERS = [
+    {"name": "Kate", "voice": "af_heart"},
+    {"name": "Michael", "voice": "am_michael"},
+    {"name": "Bella", "voice": "af_bella"},
+    {"name": "Alex", "voice": "am_adam"},
+    {"name": "Olivia", "voice": "af_sky"},
+    {"name": "Sarah", "voice": "af_sarah"},
+]
+
 def create_token(identity: str, room_name: str):
     token = AccessToken(API_KEY, API_SECRET)
     token.with_identity(identity)
@@ -280,7 +290,8 @@ ROLE_PRESETS = {
 @app.get("/token")
 async def token(
     user_id: str | None = Query(default=None),
-    role: str | None = Query(default=None)
+    role: str | None = Query(default=None),
+    panel_size: int = Query(default=1) # New parameter
 ):
     room_name = f"interview_{uuid4().hex}"
     identity = "browser-user"
@@ -383,6 +394,17 @@ async def token(
         pres_topics = preset["list_of_technical_topics"]
         pres_interviewer = preset["interviewer_name"]
 
+    # --- Panel Allocation ---
+    panel_size = max(1, min(panel_size, len(AVAILABLE_INTERVIEWERS)))
+    panel = AVAILABLE_INTERVIEWERS[:panel_size]
+    
+    # Assign interviewers to phases (Round Robin)
+    phases = ["intro", "resume", "core_tech", "situational", "closing"]
+    phase_to_interviewer = {
+        phase: panel[i % len(panel)]["name"] 
+        for i, phase in enumerate(phases)
+    }
+
     interview_engines[room_name] = InterviewEngine(
         llm, 
         resume_context=resume_context,
@@ -390,7 +412,9 @@ async def token(
         job_description=pres_desc,
         list_of_technical_topics=pres_topics,
         interviewer_name=pres_interviewer,
-        candidate_name=candidate_name
+        candidate_name=candidate_name,
+        panel=panel,
+        phase_to_interviewer=phase_to_interviewer
     )
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
 

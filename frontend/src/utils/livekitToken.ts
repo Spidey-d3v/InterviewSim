@@ -8,10 +8,13 @@ export async function getLiveKitToken(forceNew = false, role?: string, userId?: 
   if (inflight) return inflight;
 
   inflight = (async () => {
-    // If not passed explicitly, try to grab role from URL
+    // If not passed explicitly, try to grab role and panel_size from URL
     let currentRole = role;
-    if (!currentRole && typeof window !== 'undefined') {
-      currentRole = new URLSearchParams(window.location.search).get('role') || undefined;
+    let panelSize = undefined;
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (!currentRole) currentRole = urlParams.get('role') || undefined;
+      panelSize = urlParams.get('panel_size') || undefined;
     }
 
     let currentUserId = userId;
@@ -24,6 +27,7 @@ export async function getLiveKitToken(forceNew = false, role?: string, userId?: 
     const params = new URLSearchParams();
     if (currentRole) params.append('role', currentRole);
     if (currentUserId) params.append('user_id', currentUserId);
+    if (panelSize) params.append('panel_size', panelSize);
 
     const qs = params.toString() ? `?${params.toString()}` : '';
     const CONVFLOW = process.env.NEXT_PUBLIC_CONVFLOW_URL || 'http://localhost:8001';

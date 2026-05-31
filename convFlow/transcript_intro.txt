@@ -1,9 +1,6 @@
 
-Interviewer: Hi Shrey, thanks for coming in today. We're excited to talk to you about the AI Engineer role here at Apple, focusing on building cutting-edge AI solutions. I noticed your work on the Interview Simulation Agent, which sounds fascinating. To start, could you tell me a bit about yourself and what led you to pursue a career in AI engineering?
-Candidate: Hi, I am shri jaisvaal, a third year undergraduate student at DML Mumbai university and EIA something which has drawn itself, drawn me towards it throughout the years I have been studying and I think it is continuously evolving and that is something that really excites me because the possibilities are still not set in stone and there is so much you could do with it. nan
+Interviewer: Hi Shrey, thanks for coming in today. We're excited to chat with you about the AI Engineer role here at Apple, focusing on building cutting-edge AI solutions. I noticed on your resume you've built a real-time conversational AI agent, which sounds incredibly interesting and relevant to our work. To start, could you tell me a bit about yourself, your background, and what led you to pursue a career in AI engineering, particularly with us at Apple?
+Candidate: Can you go to the next question please? Mujhejska answer nahin aata.
 
-Interviewer: That's a great way to put it, Shrey. It's exciting to hear about your passion for AI's evolving nature. Given your background and the projects you've highlighted, like the AI Powered Medical Diagnosis Tool, what specifically about this AI Engineer role at Apple resonates with your career aspirations and why do you believe you'd be a strong fit for our team?
-Candidate: I feel that Apple has already existing framework of high computing edge devices that it has deployed and I feel like those serve as a those give it a great edge in terms of deploying local first AI solutions in the future and I feel it is unique position to really capture the market there and that is something which draws me towards Apple. nan
-
-Interviewer: That's a fantastic perspective, Shrey. Apple's focus on on-device AI is definitely a key area. Considering your experience with real-time AI systems and your interest in cutting-edge solutions, could you elaborate on a specific technical challenge you faced in one of your projects, perhaps the Interview Simulation Agent, and how you approached solving it?
-Candidate: So the problems were related related to ETI custom and I solved them by deploying a local model and using local TTS and STT models wherever possible.
+Interviewer: No problem at all, Shrey. Let's shift gears. Can you tell me about a challenging technical problem you've faced in a project and how you approached solving it?
+Candidate: Next phase please.

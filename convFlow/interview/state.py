@@ -5,6 +5,11 @@ class InterviewState(TypedDict):
     # Core flow
     phase: str
 
+    # Panel tracking
+    panel: List[Dict[str, str]]  # [{"name": "Kate", "voice": "af_heart"}, ...]
+    phase_to_interviewer: Dict[str, str] # {"intro": "Kate", ...}
+    current_interviewer: str # "Kate"
+
     # Turn tracking
     last_question: str
     last_answer: str

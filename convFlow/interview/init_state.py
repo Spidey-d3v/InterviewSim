@@ -4,6 +4,11 @@ def create_initial_state():
         "phase": "intro",
         "candidate_name": "",
 
+        # Panel tracking
+        "panel": [],
+        "phase_to_interviewer": {},
+        "current_interviewer": "",
+
         # Turn tracking
         "last_question": "",
         "last_answer": "",

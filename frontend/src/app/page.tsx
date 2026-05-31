@@ -14,6 +14,7 @@ export default function LandingPage() {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null);
   const [hasResume, setHasResume] = useState<boolean | null>(null);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [panelSize, setPanelSize] = useState(1);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [mlBars] = useState<Array<{ width: number; value: number }>>(() =>
     Array.from({ length: 12 }).map(() => ({
@@ -86,7 +87,7 @@ export default function LandingPage() {
 
   const handleRoleSelect = (role: string) => {
     setIsRoleModalOpen(false);
-    router.push(`/front/interview?role=${encodeURIComponent(role)}`);
+    router.push(`/front/interview?role=${encodeURIComponent(role)}&panel_size=${panelSize}`);
   };
 
   useEffect(() => {
@@ -377,6 +378,28 @@ export default function LandingPage() {
             <button onClick={() => setIsRoleModalOpen(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white"><X size={20} /></button>
             <h3 className="text-2xl font-bold mb-2 uppercase tracking-tighter">Select Job Role</h3>
             <p className="text-gray-400 text-sm mb-6">Choose the domain for your custom AI evaluation.</p>
+            
+            {/* Panel Size Selector */}
+            <div className="mb-6 p-4 bg-white/5 rounded-xl border border-white/10">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-sm font-bold text-gray-300 uppercase tracking-wider">Interview Panel Size</span>
+                <span className="px-3 py-1 bg-purple-500/20 rounded-lg text-purple-400 font-bold text-lg">{panelSize}</span>
+              </div>
+              <input 
+                type="range" 
+                min="1" 
+                max="5" 
+                step="1" 
+                value={panelSize}
+                onChange={(e) => setPanelSize(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+              />
+              <div className="flex justify-between mt-2 text-[10px] text-gray-500 font-bold uppercase tracking-tighter">
+                <span>Single</span>
+                <span>Full Panel (5)</span>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-3">
               {ROLES.map(role => (
                 <button key={role} onClick={() => handleRoleSelect(role)} className="px-4 py-4 text-left bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-xl transition-all font-medium text-white group flex items-center justify-between">

@@ -94,9 +94,19 @@ interface MainDisplayProps {
   questionIndex: number;
   isChunkRecording: boolean;
   isPaused: boolean;
+  activeSpeaker: string | null;
   onPrev: () => void;
   onNext: () => void;
 }
+
+const SPEAKER_COLORS: Record<string, string> = {
+  Kate: 'bg-purple-500',
+  Michael: 'bg-blue-500',
+  Bella: 'bg-pink-500',
+  Alex: 'bg-green-500',
+  Olivia: 'bg-orange-500',
+  Sarah: 'bg-teal-500',
+};
 
 export function InterviewMainDisplay({
   videoRef,
@@ -110,9 +120,13 @@ export function InterviewMainDisplay({
   questionIndex,
   isChunkRecording,
   isPaused,
+  activeSpeaker,
   onPrev,
   onNext,
 }: MainDisplayProps) {
+  const speakerName = activeSpeaker || 'Kate';
+  const speakerColor = SPEAKER_COLORS[speakerName] || 'bg-purple-500';
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 relative overflow-y-auto">
       <div className="absolute inset-0 pointer-events-none">
@@ -143,6 +157,20 @@ export function InterviewMainDisplay({
 
           {isChunkRecording && !isPaused && <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-red-600/80 backdrop-blur-sm rounded-full animate-pulse text-[10px] font-bold">REC</div>}
 
+          {/* Interviewer Cutout Placeholder */}
+          {interviewStarted && !isPaused && (
+            <div className="absolute bottom-6 right-6 flex flex-col items-center animate-fade-in">
+              <div className={`w-32 h-32 ${speakerColor} rounded-2xl border-4 border-white/20 shadow-2xl transition-all duration-500 overflow-hidden relative`}>
+                <div className="absolute inset-0 flex items-center justify-center text-white/20">
+                    <svg className="w-20 h-20" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                </div>
+              </div>
+              <div className="mt-3 px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 shadow-lg">
+                <span className="text-sm font-bold tracking-wider">{speakerName}</span>
+              </div>
+            </div>
+          )}
+
           <div className="absolute top-4 right-4 px-3 py-2 bg-gradient-to-br from-purple-500/80 to-pink-500/80 backdrop-blur-sm rounded-lg border border-white/30 text-xs font-medium">
             {interviewStarted ? `AI Monitoring • Phase: ${currentPhase.toUpperCase().replace('_', ' ')}` : 'Calibrating'}
           </div>
@@ -154,7 +182,7 @@ export function InterviewMainDisplay({
           <div className="max-w-3xl mx-auto">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-purple-400 font-mono uppercase tracking-wider">
-                {questionStatus === 'streaming' ? 'AI is speaking...' : `Question ${questionIndex + 1} of ${aiQuestions.length || 1}`}
+                {questionStatus === 'streaming' ? `${speakerName} is speaking...` : `Question ${questionIndex + 1} of ${aiQuestions.length || 1}`}
               </span>
               <div className="flex gap-2">
                 <button onClick={onPrev} disabled={questionIndex === 0} className="px-2 py-1 text-xs text-gray-500 hover:text-white disabled:opacity-20 transition-all">← Prev</button>

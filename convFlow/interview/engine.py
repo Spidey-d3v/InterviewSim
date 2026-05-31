@@ -20,11 +20,20 @@ from interview.utils.rolling_summarizer import update_summary
 class InterviewEngine:
 
     def __init__(self, llm, job_role: str = "", job_description: str = "", resume_context: str = "",
-    list_of_technical_topics: str = "", company_name: str = "", candidate_name: str = "", interviewer_name: str = ""):
+    list_of_technical_topics: str = "", company_name: str = "", candidate_name: str = "", interviewer_name: str = "",
+    panel: list = None, phase_to_interviewer: dict = None):
         self.llm = llm
         self.state = create_initial_state()
         self.interview_end = False
         self.eval_tasks = []
+
+        if panel:
+            self.state["panel"] = panel
+        if phase_to_interviewer:
+            self.state["phase_to_interviewer"] = phase_to_interviewer
+            # Set initial interviewer based on 'intro' phase
+            self.state["current_interviewer"] = phase_to_interviewer.get("intro", interviewer_name)
+            self.state["interviewer_name"] = self.state["current_interviewer"]
 
         if job_role:
             self.state["job_role"] = job_role
@@ -239,7 +248,17 @@ class InterviewEngine:
                 )
 
                 # -------------------- PHASE SWITCH --------------------
-                self.state["phase"] = q_output.get("next_phase", self.state["phase"]) # phase change
+                next_phase = q_output.get("next_phase", self.state["phase"])
+                old_interviewer = self.state["current_interviewer"]
+                next_interviewer = self.state["phase_to_interviewer"].get(next_phase, old_interviewer)
+
+                if next_interviewer != old_interviewer:
+                    handover_instruction = f"IMPORTANT: You are now {next_interviewer}. You are taking over the interview from {old_interviewer} for the {next_phase} round. Start by briefly acknowledging {old_interviewer} and introducing yourself, then proceed with the first question of the {next_phase} round."
+                    q_output["context_for_generator"] = f"{q_output.get('context_for_generator', '')}\n\n{handover_instruction}"
+                    self.state["current_interviewer"] = next_interviewer
+                    self.state["interviewer_name"] = next_interviewer
+
+                self.state["phase"] = next_phase
                 self.state["phase_question_count"] = 0
                 self.state["phase_word_count"] = 0
                 self.state["phase_transcript"] = ""

@@ -28,3 +28,7 @@ converted_*.wav
 
 
 cloudflared.exe
+.understand-anything/
+node_modules/
+*.yaml
+*.json

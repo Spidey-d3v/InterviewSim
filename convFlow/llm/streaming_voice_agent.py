@@ -14,10 +14,11 @@ class SentenceChunker:
         self.buffer = ""
         self.min_chars = min_chars
         self.max_chars = max_chars
+        self.current_speaker = None
         
-    async def feed(self, token: str) -> list[str]:
+    async def feed(self, token: str) -> list[tuple[str | None, str]]:
         """
-        Add token and return list of completed chunks.
+        Add token and return list of (speaker, sentence) tuples.
         """
         self.buffer += token
         chunks = []
@@ -32,25 +33,25 @@ class SentenceChunker:
             sentence = self.buffer[:idx].strip()
 
             if len(sentence) >= self.min_chars or len(self.buffer) >= 40:
-                chunks.append(sentence)
+                chunks.append((self.current_speaker, sentence))
                 self.buffer = self.buffer[idx:].lstrip()
             else:
                 break
 
         # Safety flush if too large
         if len(self.buffer) > self.max_chars:
-            chunks.append(self.buffer.strip())
+            chunks.append((self.current_speaker, self.buffer.strip()))
             self.buffer = ""
 
         return chunks
 
-    def flush(self) -> str:
+    def flush(self) -> tuple[str | None, str]:
         leftover = self.buffer.strip()
         self.buffer = ""
-        return leftover
+        return (self.current_speaker, leftover)
     
 class StreamingVoiceAgent:
-    def __init__(self, llm, tts, audio_source,interview_engine):
+    def __init__(self, llm, tts, audio_source, interview_engine):
         self.llm = llm
         self.tts = tts
         self.audio_source = audio_source
@@ -59,16 +60,19 @@ class StreamingVoiceAgent:
         self.first_audio_emitted = None
         self.tts_queue = asyncio.Queue()
         self.tts_task_ref = None
-        
-        # Kokoro Voice Rotation
-        self.available_voices = ["af_heart", "af_bella", "af_sky", "am_adam", "am_michael"]
-        self.voice_index = 0
 
-    def get_next_voice(self) -> str:
-        """Cycle through available voices."""
-        voice = self.available_voices[self.voice_index]
-        self.voice_index = (self.voice_index + 1) % len(self.available_voices)
-        return voice
+    def _get_voice_for_speaker(self, speaker_name: str | None) -> str:
+        """Map speaker name to Kokoro voice ID using panel state."""
+        panel = self.interview_engine.state.get("panel", [])
+        # Fallback to current interviewer if speaker_name is None
+        name_to_find = speaker_name or self.interview_engine.state.get("current_interviewer")
+        
+        for p in panel:
+            if p["name"] == name_to_find:
+                return p["voice"]
+        
+        # Ultimate fallback
+        return "af_heart"
 
     def stop_tts(self):
         """Immediately stop current speech generation and playback."""
@@ -96,20 +100,23 @@ class StreamingVoiceAgent:
         if on_question_update:
             await on_question_update(question_text, True)
 
-        turn_voice = self.get_next_voice()
-        self.tts_task_ref = asyncio.create_task(self._tts_worker(turn_voice))
-        self.tts_queue.put_nowait(question_text)
+        self.tts_task_ref = asyncio.create_task(self._tts_worker())
+        # Use current interviewer for repeat
+        voice = self._get_voice_for_speaker(None)
+        self.tts_queue.put_nowait((voice, question_text))
         self.tts_queue.put_nowait(None) # End signal
         await self.tts_queue.join()
 
-    async def _tts_worker(self, turn_voice: str):
+    async def _tts_worker(self):
         while True:
-            chunk = await self.tts_queue.get()
+            item = await self.tts_queue.get()
             try:
-                if chunk is None:
+                if item is None:
                     break
+                
+                voice, chunk = item
 
-                for audio_chunk in self.tts.synthesize(chunk, voice=turn_voice):
+                for audio_chunk in self.tts.synthesize(chunk, voice=voice):
                     if not self.first_audio_emitted:
                         now = asyncio.get_event_loop().time()
                         print(f"⏱ First Audio Latency: {now - self.turn_start:.3f}s")
@@ -135,8 +142,7 @@ class StreamingVoiceAgent:
         self.turn_start = stt_done_time
         self.first_audio_emitted = False
         chunker = SentenceChunker()
-        turn_voice = self.get_next_voice()
-        self.tts_task_ref = asyncio.create_task(self._tts_worker(turn_voice))
+        self.tts_task_ref = asyncio.create_task(self._tts_worker())
         streamed_question = ""
         last_emit_len = 0
         last_emit_ts = 0.0
@@ -158,17 +164,19 @@ class StreamingVoiceAgent:
                         text = streamed_question.strip()
                         if text:
                             await on_question_update(text, False)
-                            last_emit_len = len(text)
+                            last_emit_len = len(streamed_question.strip())
                             last_emit_ts = now
 
                 chunks = await chunker.feed(token)
-                for sentence in chunks:
-                    await self.tts_queue.put(sentence)
+                for speaker, sentence in chunks:
+                    voice = self._get_voice_for_speaker(speaker)
+                    await self.tts_queue.put((voice, sentence))
             
             # After ALL tokens processed
-            leftover = chunker.flush()
+            speaker, leftover = chunker.flush()
             if leftover:
-                await self.tts_queue.put(leftover)
+                voice = self._get_voice_for_speaker(speaker)
+                await self.tts_queue.put((voice, leftover))
             
             # Signal end and wait for TTS to finish
             await self.tts_queue.put(None)
@@ -178,10 +186,14 @@ class StreamingVoiceAgent:
             self.stop_tts()
             raise
         
+        # Clean final question stored in state
         final_question = self.interview_engine.state.get("last_question")
-        if on_question_update and final_question:
-            await on_question_update(final_question, True)
-        return final_question
+        if final_question:
+            self.interview_engine.state["last_question"] = final_question
+            if on_question_update:
+                await on_question_update(final_question, True)
+        
+        return self.interview_engine.state.get("last_question")
         
     # --------- HELPER ------------
 

@@ -37,7 +37,6 @@ async def node_r_generate_stream(
     Your job:
     - Convert this into a natural spoken interviewer response
     - Maintain a conversational, professional tone
-    - Do not use any placeholders and avoid talking about information you do not know like your name
     - If it's a transition → make it smooth
     - If it's a probe → be concise and targeted
     - If it's a closing/termination → be polite and professional
