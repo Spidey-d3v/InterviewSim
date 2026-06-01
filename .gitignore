@@ -1,7 +1,8 @@
 Atempt2/checkpoints/
 __pycache__/
 *.pyc
-Vision/data/
+Vision/data/\
+Vision/models/*.pkl
 
 frontend/node_modules
 
