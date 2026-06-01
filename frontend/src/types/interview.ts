@@ -15,8 +15,7 @@ export type PersistedChunkMetric = {
   chunk_index: number;
   question_index: number;
   question_text: string;
-  confidence_score: number | null;
-  voice_score: number | null;
+  praat_features?: Record<string, number> | null;
   gaze_distribution: GazeDistribution;
   smart_turn_probability: number | null;
   smart_turn_is_complete: boolean | null;
@@ -29,8 +28,8 @@ export type PersistedQuestionMetric = {
   phase?: string;
   chunks: PersistedChunkMetric[];
   question_averages: {
-    confidence_score: number | null;
-    voice_score: number | null;
+    wpm: number | null;
+    focus: number | null;
   };
 };
 

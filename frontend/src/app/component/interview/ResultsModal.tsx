@@ -30,6 +30,7 @@ interface ResultsModalProps {
   sessionPersistError: string | null;
   onPersist: () => Promise<boolean>;
   onClose: () => void;
+  v2Feedback?: any;
 }
 
 export default function ResultsModal({
@@ -48,6 +49,7 @@ export default function ResultsModal({
   sessionPersistError,
   onPersist,
   onClose,
+  v2Feedback
 }: ResultsModalProps) {
   const router = useRouter();
 
@@ -126,28 +128,7 @@ export default function ResultsModal({
     // 2. Render Header
     drawHeader();
 
-    // 3. Summary Cards
-    const cardWidth = (contentWidth - 10) / 2;
-    const cardHeight = 60;
-    
-    [
-      { label: 'CONFIDENCE', val: `${avgConf.toFixed(1)}/10` },
-      { label: 'COMMUNICATION', val: `${avgVoice.toFixed(1)}/10` },
-    ].forEach((card, i) => {
-      const x = margin + i * (cardWidth + 10);
-      pdf.setFillColor(COLORS.BG_GREY[0], COLORS.BG_GREY[1], COLORS.BG_GREY[2]);
-      pdf.rect(x, y, cardWidth, cardHeight, 'F');
-      
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(18);
-      pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
-      pdf.text(card.val, x + cardWidth/2, y + 30, { align: 'center' });
-      
-      pdf.setFontSize(7);
-      pdf.setTextColor(COLORS.TEXT_LIGHT[0], COLORS.TEXT_LIGHT[1], COLORS.TEXT_LIGHT[2]);
-      pdf.text(card.label, x + cardWidth/2, y + 45, { align: 'center' });
-    });
-    y += cardHeight + 40;
+    y += 20;
 
     // 4. Phase Analysis
     pdf.setFont('helvetica', 'bold');
@@ -288,11 +269,140 @@ export default function ResultsModal({
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7.5);
         pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
-        pdf.text(`Confidence: ${scoreCell(q.question_averages.confidence_score)}  |  Voice: ${scoreCell(q.question_averages.voice_score)}`, margin + 25, y);
+        const camActivity = q.question_averages.focus != null ? ((q.question_averages.focus / 100) * 5).toFixed(1) + '/5' : 'N/A';
+        pdf.text(`Camera Activity: ${camActivity}  |  WPM: ${q.question_averages.wpm != null ? Math.round(q.question_averages.wpm) : 'N/A'}`, margin + 25, y);
         y += 20;
       });
 
       y += 10;
+    }
+
+    // --- Voice Modulation Graph (Pitch) ---
+    // Extract pitch values chronologically across all questions
+    const pitchData: number[] = [];
+    metrics.forEach(q => {
+      q.chunks.forEach(c => {
+        if (c.praat_features && c.praat_features.mean_pitch > 0) {
+          pitchData.push(c.praat_features.mean_pitch);
+        }
+      });
+    });
+
+    if (pitchData.length > 1) {
+      ensureSpace(120);
+      pdf.setDrawColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+      pdf.setLineWidth(2);
+      pdf.line(margin, y, margin + 120, y);
+      y += 20;
+
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      pdf.text('VOICE MODULATION PROFILE (PITCH)', margin, y);
+      y += 20;
+
+      // Draw Graph Area
+      const graphWidth = contentWidth;
+      const graphHeight = 60;
+      const graphX = margin;
+      const graphY = y;
+
+      pdf.setFillColor(249, 250, 251); // Gray bg
+      pdf.rect(graphX, graphY, graphWidth, graphHeight, 'F');
+      
+      const maxPitch = Math.max(...pitchData) + 20;
+      const minPitch = Math.max(0, Math.min(...pitchData) - 20);
+      const pitchRange = maxPitch - minPitch;
+
+      const stepX = graphWidth / (pitchData.length - 1);
+      
+      pdf.setDrawColor(COLORS.EMERALD[0], COLORS.EMERALD[1], COLORS.EMERALD[2]);
+      pdf.setLineWidth(1.5);
+      
+      let prevX = graphX;
+      let prevY = graphY + graphHeight - ((pitchData[0] - minPitch) / pitchRange) * graphHeight;
+
+      for (let i = 1; i < pitchData.length; i++) {
+        const currX = graphX + (i * stepX);
+        const currY = graphY + graphHeight - ((pitchData[i] - minPitch) / pitchRange) * graphHeight;
+        
+        pdf.line(prevX, prevY, currX, currY);
+        
+        // Draw point
+        pdf.setFillColor(COLORS.EMERALD[0], COLORS.EMERALD[1], COLORS.EMERALD[2]);
+        pdf.circle(currX, currY, 1.5, 'F');
+        if (i === 1) pdf.circle(prevX, prevY, 1.5, 'F'); // draw first point
+        
+        prevX = currX;
+        prevY = currY;
+      }
+
+      pdf.setFontSize(8);
+      pdf.setTextColor(150, 150, 150);
+      pdf.text(`${Math.round(maxPitch)} Hz`, graphX + graphWidth + 2, graphY + 5);
+      pdf.text(`${Math.round(minPitch)} Hz`, graphX + graphWidth + 2, graphY + graphHeight);
+      pdf.text('Time (Chunks)', graphX + (graphWidth/2) - 15, graphY + graphHeight + 10);
+      
+      y += graphHeight + 25;
+    }
+
+    if (v2Feedback?.version === 2) {
+      ensureSpace(120);
+      pdf.setDrawColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+      pdf.setLineWidth(2);
+      pdf.line(margin, y, margin + 120, y);
+      y += 20;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(14);
+      pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+      pdf.text('OVERALL OBSERVATIONS & ACTION PLAN', margin, y);
+      y += 20;
+
+      const obs = v2Feedback.observations;
+      ensureSpace(80);
+      pdf.setFillColor(243, 244, 246);
+      pdf.rect(margin, y, contentWidth, 70, 'F');
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(8);
+      pdf.setTextColor(75, 85, 99);
+      pdf.text(`PACE: ${obs.pace?.wpm || 0} WPM (${obs.pace?.status || 'balanced'})`, margin + 15, y + 20);
+      pdf.text(`PAUSES: ${obs.pauses?.long_pause_count || 0} long (ratio: ${obs.pauses?.pause_ratio || 0})`, margin + 15, y + 35);
+      
+      const pitch = obs.modulation?.pitch_variation || 'balanced';
+      const vol = obs.modulation?.volume_variation || 'balanced';
+      pdf.text(`MODULATION: Pitch: ${pitch} | Volume: ${vol}`, margin + 15, y + 50);
+
+      if (obs.fillers && Object.keys(obs.fillers).length > 0) {
+         const fTxt = Object.entries(obs.fillers).map(([k,v]) => `${k.toUpperCase()}: ${v}`).join(' | ');
+         pdf.text(`FILLERS: ${fTxt}`, margin + 250, y + 20);
+      }
+      y += 90;
+
+      if (v2Feedback.actions && v2Feedback.actions.length > 0) {
+        v2Feedback.actions.forEach((act: any) => {
+          ensureSpace(50);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(9);
+          pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+          pdf.text(`Priority ${act.priority}:`, margin, y);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+          const actLines = pdf.splitTextToSize(act.message, contentWidth - 60);
+          actLines.forEach((al: string) => {
+            pdf.text(al, margin + 50, y);
+            y += 12;
+          });
+          
+          if (act.evidence && act.evidence.length > 0) {
+            pdf.setFontSize(7.5);
+            pdf.setTextColor(COLORS.TEXT_LIGHT[0], COLORS.TEXT_LIGHT[1], COLORS.TEXT_LIGHT[2]);
+            pdf.text(`Evidence: ${act.evidence.join(', ')}`, margin + 50, y);
+            y += 12;
+          }
+          y += 10;
+        });
+      }
     }
 
     // Footer
@@ -305,7 +415,7 @@ export default function ResultsModal({
     pdf.text(`Confidential Report • Ref: ${(interviewSessionId || '').slice(0, 8)}`, margin + contentWidth, footerY, { align: 'right' });
 
     pdf.save(`interview-report-${(interviewSessionId || '').slice(0, 8) || Date.now()}.pdf`);
-  }, [chunkResults, questionMetrics, finalScores, interviewSessionId, interviewStartedAt, currentUserId, recordingTime]);
+  }, [chunkResults, questionMetrics, finalScores, interviewSessionId, interviewStartedAt, currentUserId, recordingTime, v2Feedback]);
 
 
   if (!show) return null;
@@ -332,7 +442,7 @@ export default function ResultsModal({
 
         <div className="p-6">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-            <StatCard label="Focus Score" value={`${liveFocusPct.toFixed(1)}%`} color="blue" />
+            <StatCard label="Camera Activity" value={`${((liveFocusPct / 100) * 5).toFixed(1)}/5`} color="blue" />
             <StatCard label="Voice Skills" value={scoreCell(mean(chunkResults.map(c => c.voice_analysis?.score)))} color="emerald" />
             <StatCard label="Avg Confidence" value={scoreCell(mean(chunkResults.flatMap(c => c.predictions.map(p => p.confidence))))} color="purple" />
           </div>
@@ -348,7 +458,6 @@ export default function ResultsModal({
                       <span className="font-mono text-gray-400">Chunk {idx + 1}</span>
                       <div className="flex gap-3">
                         <MetricSpan label="Voice" val={chunk.voice_analysis?.score} color="emerald" />
-                        <MetricSpan label="Conf" val={chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null} color="purple" />
                         <span className="text-gray-400">Gaze: {counts.focused}/{counts.total}</span>
                       </div>
                     </div>

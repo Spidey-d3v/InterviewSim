@@ -30,10 +30,8 @@ export interface PredictionSummary {
 }
 
 export interface VoiceAnalysis {
-  score: number | null;
-  window_times: number[];
-  window_scores: number[];
-  error: string | null;
+  praat_features?: Record<string, number> | null;
+  error?: string | null;
 }
 
 export interface GazeSummary {
@@ -200,9 +198,7 @@ export function useVisionSession() {
             const rawVoice = message.voice_analysis;
             const voice_analysis: VoiceAnalysis | null = rawVoice
               ? {
-                  score: rawVoice.score ?? null,
-                  window_times: rawVoice.window_times ?? [],
-                  window_scores: rawVoice.window_scores ?? [],
+                  praat_features: rawVoice.praat_features ?? null,
                   error: rawVoice.error ?? null,
                 }
               : null;

@@ -64,8 +64,9 @@ class ChunkMetricModel(BaseModel):
     chunk_index: int
     question_index: int
     question_text: str
-    confidence_score: Optional[float] = None
+    praat_features: Optional[dict] = None
     voice_score: Optional[float] = None
+    confidence_score: Optional[float] = None
     gaze_distribution: GazeDistributionModel = Field(default_factory=GazeDistributionModel)
 
 
@@ -654,12 +655,55 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             "completed_at": payload.completed_at,
             # Use exclude_none to avoid sending candidate_answer if it's not supported/present
             "question_metrics_json": [q.model_dump(exclude_none=True) for q in payload.question_metrics_json],
-            "overall_confidence_score": _clamp_01(_safe_mean([c.confidence_score for c in all_chunks])),
-            "overall_voice_score": _clamp_01(_safe_mean([c.voice_score for c in all_chunks])),
+
             "total_questions": len(payload.question_metrics_json),
             "total_chunks": len(all_chunks),
-            **_compute_overall_gaze(all_chunks),
         }
+
+        # Safely compute overall metrics for the DB and Dashboard UI
+        total_focus = 0
+        total_gaze_frames = 0
+        voice_scores = []
+        confidences = []
+        gaze_dist = {"forward": 0, "left": 0, "right": 0, "down": 0, "away": 0}
+
+        for c in all_chunks:
+            if c.voice_score is not None:
+                voice_scores.append(c.voice_score)
+            if c.confidence_score is not None:
+                confidences.append(c.confidence_score)
+            
+            g = c.gaze_distribution
+            chunk_gaze_total = g.forward + g.left + g.right + g.down + g.away
+            if chunk_gaze_total > 0:
+                gaze_dist["forward"] += g.forward
+                gaze_dist["left"] += g.left
+                gaze_dist["right"] += g.right
+                gaze_dist["down"] += g.down
+                gaze_dist["away"] += g.away
+                total_gaze_frames += chunk_gaze_total
+                total_focus += g.forward
+
+        # Calculate overall WPM using Whisper text and Gaze duration
+        total_words = 0
+        for q in payload.question_metrics_json:
+            if q.candidate_answer:
+                total_words += len([w for w in q.candidate_answer.strip().split() if w])
+        
+        overall_duration_minutes = (total_gaze_frames / 27) / 60
+        
+        row["overall_gaze_distribution"] = gaze_dist
+        row["average_focus"] = (total_focus / total_gaze_frames) if total_gaze_frames > 0 else 0.0
+        row["average_wpm"] = (total_words / overall_duration_minutes) if overall_duration_minutes > 0.05 else 0.0
+        row["overall_camera_engagement"] = (sum(confidences) / len(confidences)) if confidences else 0.0
+
+        try:
+            from llm.feedback_generator import generate_v2_feedback
+            metrics_dump = [q.model_dump(exclude_none=True) for q in payload.question_metrics_json]
+            v2_feedback = generate_v2_feedback(metrics_dump, len(payload.question_metrics_json), len(all_chunks))
+            row["recommendation_v2"] = v2_feedback
+        except Exception as e:
+            print(f"Failed to generate v2 feedback: {e}")
 
         if payload.llm_evaluation_json:
             row["llm_evaluation_json"] = payload.llm_evaluation_json
@@ -676,9 +720,10 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
                 try:
                     supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
                 except Exception as db_err2:
-                    print(f"⚠️ Retrying without evaluation columns: {db_err2}")
+                    print(f"⚠️ Retrying without evaluation/recommendation columns: {db_err2}")
                     row.pop("llm_evaluation", None)
                     row.pop("llm_evaluation_json", None)
+                    row.pop("recommendation_v2", None)
                     supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
             else:
                 raise db_err
@@ -688,9 +733,12 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             "session_id": payload.session_id,
             "total_questions": row["total_questions"],
             "total_chunks": row["total_chunks"],
+            "recommendation_v2": row.get("recommendation_v2")
         }
     except Exception as e:
         print(f"❌ Session finalize error: {e}")
+        with open("db_err.txt", "w") as f:
+            f.write(str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 # -------------------- LiveKit Agent --------------------

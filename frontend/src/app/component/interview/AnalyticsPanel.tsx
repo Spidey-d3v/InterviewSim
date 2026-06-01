@@ -53,15 +53,6 @@ export default function AnalyticsPanel({
           color="bg-purple-500"
         />
 
-        {/* Confidence */}
-        <MetricSection
-          label="AI Confidence Score"
-          value={latestConfidence !== null ? `${(latestConfidence * 100).toFixed(1)}%` : 'Analyzing…'}
-          percent={latestConfidence !== null ? latestConfidence * 100 : 0}
-          color="bg-gradient-to-r from-blue-500 to-cyan-400"
-          subtext={chunkResults.length > 0 ? `Based on ${chunkResults.length} chunks` : undefined}
-        />
-
         {/* Voice */}
         <MetricSection
           label="Voice Skills"

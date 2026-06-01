@@ -66,11 +66,11 @@ export default function DashboardClient({ sessions, profile, userId }: Dashboard
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h3 className="text-xl font-bold tracking-tight">Performance Trajectory</h3>
-                  <p className="text-sm text-gray-500 mt-1">Confidence vs. Eye Contact over time.</p>
+                  <p className="text-sm text-gray-500 mt-1">Camera engagement vs. eye contact over time.</p>
                 </div>
                 <div className="flex gap-4">
                    <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-gray-400">
-                     <div className="w-2 h-2 rounded-full bg-purple-500" /> Confidence
+                     <div className="w-2 h-2 rounded-full bg-purple-500" /> Camera Engagement
                    </div>
                    <div className="flex items-center gap-2 text-[10px] uppercase font-bold text-gray-400">
                      <div className="w-2 h-2 rounded-full bg-pink-500" /> Focus

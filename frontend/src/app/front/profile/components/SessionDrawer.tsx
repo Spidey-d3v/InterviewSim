@@ -41,6 +41,7 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
   const isV2 = rawMetrics && !Array.isArray(rawMetrics) && rawMetrics.version === 2;
   const questions = isV2 ? rawMetrics.questions : (Array.isArray(rawMetrics) ? rawMetrics : []);
   const phaseEvaluations = session.llm_evaluation_json || (isV2 ? rawMetrics.phase_evaluations : null);
+  const v2Feedback = session.recommendation_v2;
 
   const date = new Date(session.created_at).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -49,15 +50,14 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
     day: 'numeric'
   });
 
-  const scores = [
-    { label: 'Confidence', val: session.overall_confidence_score, icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500/10' },
-    { label: 'Voice Skills', val: session.overall_voice_score, icon: Mic2, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'Voice', val: session.overall_voice_score, icon: MessageSquare, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-  ];
 
   // Aggregate filler words
   const aggregatedFillers: Record<string, number> = {};
-  if (phaseEvaluations) {
+  if (v2Feedback?.version === 2 && v2Feedback.observations?.fillers) {
+    Object.entries(v2Feedback.observations.fillers).forEach(([word, count]) => {
+      aggregatedFillers[word.toLowerCase()] = (aggregatedFillers[word.toLowerCase()] || 0) + Number(count);
+    });
+  } else if (phaseEvaluations) {
     Object.values(phaseEvaluations).forEach((data: any) => {
       if (data.filler_words) {
         Object.entries(data.filler_words).forEach(([word, count]) => {
@@ -117,21 +117,9 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12">
-          {/* Main Score Grid */}
-          <div className="grid grid-cols-3 gap-4">
-             {scores.map((s) => (
-               <div key={s.label} className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 text-center group hover:bg-white/[0.04] transition-colors">
-                  <div className={`w-12 h-12 ${s.bg} rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
-                    <s.icon size={24} className={s.color} />
-                  </div>
-                  <p className="text-3xl font-black leading-none">{Math.round((s.val || 0) * 100)}%</p>
-                  <p className="text-[10px] uppercase font-bold text-gray-500 mt-3 tracking-widest">{s.label}</p>
-               </div>
-             ))}
-          </div>
 
-          {/* Phase-Wise Breakdown (V2 Only) */}
-          {phaseEvaluations && (
+          {/* Phase-Wise Breakdown (Legacy) */}
+          {!v2Feedback && phaseEvaluations && (
             <section>
               <div className="flex items-center gap-2 mb-6">
                 <Target size={18} className="text-purple-500" />
@@ -171,6 +159,69 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                         </ul>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* V2 Feedback (Observations & Actions) */}
+          {v2Feedback?.version === 2 && (
+            <section>
+              <div className="flex items-center gap-2 mb-6">
+                <Target size={18} className="text-purple-500" />
+                <h3 className="text-lg font-bold tracking-tight uppercase">Performance Observations</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Pace</p>
+                   <p className="text-2xl font-black text-gray-200">{v2Feedback.observations.pace?.wpm || 0} <span className="text-xs text-gray-500">WPM</span></p>
+                   <p className="text-xs text-purple-400 capitalize font-bold mt-1">{v2Feedback.observations.pace?.status || "Balanced"}</p>
+                </div>
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Pauses</p>
+                   <p className="text-2xl font-black text-gray-200">{v2Feedback.observations.pauses?.long_pause_count || 0}</p>
+                   <p className="text-xs text-purple-400 font-bold mt-1">Ratio: {v2Feedback.observations.pauses?.pause_ratio || 0}</p>
+                </div>
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl col-span-2">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Modulation</p>
+                   <div className="flex justify-between mt-2">
+                     <div>
+                       <span className="text-xs text-gray-400">Pitch Variation: </span>
+                       <span className="text-xs font-bold text-gray-200 capitalize">{v2Feedback.observations.modulation?.pitch_variation || 'Balanced'}</span>
+                     </div>
+                     <div>
+                       <span className="text-xs text-gray-400">Volume Variation: </span>
+                       <span className="text-xs font-bold text-gray-200 capitalize">{v2Feedback.observations.modulation?.volume_variation || 'Balanced'}</span>
+                     </div>
+                   </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mb-6 mt-8">
+                <Lightbulb size={18} className="text-yellow-500" />
+                <h3 className="text-lg font-bold tracking-tight uppercase">Strategic Action Plan</h3>
+              </div>
+              <div className="space-y-4 mb-8">
+                {(v2Feedback.actions || []).map((action: any, idx: number) => (
+                  <div key={idx} className="p-5 bg-yellow-500/5 rounded-2xl border border-yellow-500/10">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 h-6 rounded-full bg-yellow-500/20 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-bold text-yellow-500">{action.priority}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-300 leading-relaxed font-medium">{action.message}</p>
+                        {action.evidence && action.evidence.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {action.evidence.map((ev: string, eIdx: number) => (
+                              <span key={eIdx} className="px-2 py-1 bg-white/5 text-gray-400 rounded-lg text-[10px] font-bold">
+                                {ev}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

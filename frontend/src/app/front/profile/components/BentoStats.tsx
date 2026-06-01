@@ -18,8 +18,13 @@ interface BentoStatsProps {
 export default function BentoStats({ sessions }: BentoStatsProps) {
   // Aggregate stats
   const totalSessions = sessions.length;
-  const avgConfidence = sessions.length > 0 
-    ? (sessions.reduce((acc, s) => acc + (s.overall_confidence_score || 0), 0) / sessions.length) * 100 
+  const avgWpm = sessions.length > 0 
+    ? (sessions.reduce((acc, s) => {
+        const chunks = (s.question_metrics_json || []).flatMap((q: any) => q.chunks || []);
+        const scores = chunks.map((c: any) => c.praat_features?.wpm).filter((v: any) => typeof v === 'number');
+        const sessionAvg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+        return acc + sessionAvg;
+      }, 0) / sessions.length) 
     : 0;
   
   const totalQuestions = sessions.reduce((acc, s) => acc + (s.total_questions || 0), 0);
@@ -45,9 +50,12 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
     .slice(0, 3);
 
   // Data for Sparklines (last 10 sessions)
-  const confidenceTrend = sessions.slice(0, 10).reverse().map(s => ({
-    value: (s.overall_confidence_score || 0) * 100
-  }));
+  const wpmTrend = sessions.slice(0, 10).reverse().map(s => {
+    const chunks = (s.question_metrics_json || []).flatMap((q: any) => q.chunks || []);
+    const scores = chunks.map((c: any) => c.praat_features?.wpm).filter((v: any) => typeof v === 'number');
+    const sessionAvg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+    return { value: sessionAvg };
+  });
 
   const focusTrend = sessions.slice(0, 10).reverse().map(s => {
     const gaze = s.overall_gaze_distribution || {};
@@ -96,19 +104,19 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
         </div>
       </motion.div>
 
-      {/* Confidence Sparkline */}
+      {/* Camera Engagement Sparkline */}
       <motion.div variants={item} className="bg-white/[0.03] border border-white/10 rounded-[2rem] p-6 backdrop-blur-xl hover:bg-white/[0.05] transition-colors">
         <div className="flex justify-between items-start mb-6">
           <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center text-blue-400">
             <TrendingUp size={20} />
           </div>
           <div className="text-right">
-             <p className="text-xs font-bold text-blue-400">{avgConfidence.toFixed(1)}%</p>
-             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Avg confidence</p>
+             <p className="text-xs font-bold text-blue-400">{avgWpm.toFixed(0)}</p>
+             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Avg WPM</p>
           </div>
         </div>
         <div className="h-16 w-full">
-           <Sparkline data={confidenceTrend} color="#3b82f6" />
+           <Sparkline data={wpmTrend} color="#3b82f6" />
         </div>
       </motion.div>
 

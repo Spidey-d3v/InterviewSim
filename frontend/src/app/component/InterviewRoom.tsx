@@ -196,6 +196,7 @@ export default function InterviewRoom() {
         question_text: qCtx.question_text,
         confidence_score: (chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null) ?? null,
         voice_score: chunk.voice_analysis?.score ?? null,
+        praat_features: chunk.voice_analysis?.praat_features ?? null,
         gaze_distribution: buildChunkGazeDistribution(chunk),
         smart_turn_probability: null,
         smart_turn_is_complete: null,
@@ -210,9 +211,30 @@ export default function InterviewRoom() {
       const confs = m.chunks.map(c => c.confidence_score);
       const voices = m.chunks.map(c => c.voice_score);
 
-      m.question_averages = {
+      let totalForward = 0;
+      let totalGaze = 0;
+      m.chunks.forEach(c => {
+        const d = c.gaze_distribution;
+        if (d) {
+          const chunkTotal = d.forward + d.left + d.right + d.down + d.away;
+          totalForward += d.forward;
+          totalGaze += chunkTotal;
+        }
+      });
+      const focusVal = totalGaze > 0 ? (totalForward / totalGaze) * 100 : null;
+
+      let wpmVal: number | null = null;
+      if (m.candidate_answer && totalGaze > 0) {
+        const wordCount = m.candidate_answer.trim().split(/\s+/).filter(w => w.length > 0).length;
+        const durationMinutes = (totalGaze / 27) / 60; // 27 fps from vision_server
+        wpmVal = durationMinutes > 0.05 ? Math.round(wordCount / durationMinutes) : null;
+      }
+
+      (m as any).question_averages = {
         confidence_score: mean(confs),
         voice_score: mean(voices),
+        wpm: wpmVal,
+        focus: focusVal,
       };
     });
 
@@ -382,14 +404,6 @@ export default function InterviewRoom() {
           onPrev={() => setQuestionIndex(i => Math.max(0, i - 1))}
           onNext={() => setQuestionIndex(i => Math.min(aiQuestions.length - 1, i + 1))}
         />
-
-        <AnalyticsPanel
-          isVisible={interviewStarted && !isPaused} chunkResults={chunkResults} latestConfidence={latestConfidence}
-
-          latestVoiceScore={latestVoiceScore}
-          pendingChunks={pendingChunks} pendingUploads={pendingUploads} isChunkRecording={isChunkRecording}
-        />
-
         {chunkErrors.length > 0 && (
           <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-2 max-w-sm">
             {chunkErrors.map((err, i) => (

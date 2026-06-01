@@ -248,8 +248,8 @@ export const ReportPDF = ({ session, metrics }: ReportPDFProps) => {
             <Text style={styles.scoreLabel}>Confidence Score</Text>
           </View>
           <View style={styles.scoreCard}>
-            <Text style={styles.scoreVal}>{Math.round((session.overall_voice_score || 0) * 100)}%</Text>
-            <Text style={styles.scoreLabel}>Voice & Communication</Text>
+            <Text style={styles.scoreVal}>{session.overall_gaze_distribution ? Math.round(((session.overall_gaze_distribution.forward || 0) + (session.overall_gaze_distribution.left || 0) + (session.overall_gaze_distribution.right || 0)) * 100) : 0}%</Text>
+            <Text style={styles.scoreLabel}>Focus Mastery</Text>
           </View>
         </View>
 

@@ -32,10 +32,7 @@ export default function SessionTimeline({ sessions, onSelectSession }: SessionTi
           day: 'numeric'
         });
         
-        const avgScore = Math.round((
-          (session.overall_confidence_score || 0) +
-          (session.overall_voice_score || 0)
-        ) / 2 * 100);
+
         return (
           <motion.div
             key={session.session_id}
@@ -52,7 +49,7 @@ export default function SessionTimeline({ sessions, onSelectSession }: SessionTi
                 </div>
                 <div>
                   <h4 className="text-sm font-bold tracking-tight text-gray-200 group-hover:text-white">
-                    {session.total_questions} Questions • {avgScore}%
+                    {session.total_questions} Questions
                   </h4>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <CheckCircle2 size={10} className="text-green-500" />

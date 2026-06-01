@@ -18,16 +18,23 @@ interface PerformanceGraphProps {
 }
 
 export default function PerformanceGraph({ sessions }: PerformanceGraphProps) {
-  // Map last 15 sessions for the graph
   const data = sessions.slice(0, 15).reverse().map((s, idx) => {
     const gaze = s.overall_gaze_distribution || {};
     const focus = (gaze.forward || 0) + (gaze.left || 0) + (gaze.right || 0);
+
+    const chunks = (s.question_metrics_json || []).flatMap((q: any) => q.chunks || []);
     
+    const voiceVals = chunks.map((c: any) => c.voice_analysis?.score).filter((v: any) => typeof v === 'number');
+    const avgVoice = voiceVals.length > 0 ? voiceVals.reduce((a: number, b: number) => a + b, 0) / voiceVals.length : (s.overall_voice_score || 0);
+
+    const confVals = chunks.flatMap((c: any) => (c.predictions || []).map((p: any) => p.confidence)).filter((v: any) => typeof v === 'number');
+    const avgCam = confVals.length > 0 ? confVals.reduce((a: number, b: number) => a + b, 0) / confVals.length : (s.overall_confidence_score || 0);
+
     return {
       name: `S${idx + 1}`,
-      confidence: Math.round((s.overall_confidence_score || 0) * 100),
+      confidence: Math.round(avgCam * 100),
       focus: Math.round(focus * 100),
-      voice: Math.round((s.overall_voice_score || 0) * 100),
+      voice: Math.round(avgVoice * 100),
     };
   });
 

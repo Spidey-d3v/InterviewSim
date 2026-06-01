@@ -94,35 +94,7 @@ class VoiceAnalyzer:
     # ------------------------------------------------------------------
 
     def load(self):
-        """Load model — safe to call multiple times; only loads once."""
-        if self._model is not None:  # fast path, no lock needed
-            return True
-        with self._lock:
-            if self._model is not None:  # second check inside lock
-                return True
-            if not _VOICE_MODEL_CLASS_AVAILABLE:
-                print("[VoiceAnalyzer] Model class unavailable — skipping load")
-                return False
-            if not os.path.exists(VOICE_MODEL_PATH):
-                print(f"[VoiceAnalyzer] Model file not found: {VOICE_MODEL_PATH}")
-                return False
-            try:
-                self._device = "cuda" if torch.cuda.is_available() else "cpu"
-                print(f"[VoiceAnalyzer] Loading model on {self._device}…")
-                self._model = VoiceWav2VecModel()
-                if _model_has_meta_tensors(self._model):
-                    # Materialize lazy/meta tensors before loading checkpoint weights.
-                    self._model = self._model.to_empty(device="cpu")
-                self._model.load_state_dict(
-                    torch.load(VOICE_MODEL_PATH, map_location="cpu", weights_only=False)
-                )
-                self._model = self._model.to(self._device)
-                self._model.eval()
-                print(f"[VoiceAnalyzer] Model ready on {self._device}")
-                return True
-            except Exception as e:
-                print(f"[VoiceAnalyzer] ERROR loading model: {e}")
-                return False
+        return True
 
     # keep _load as an alias so nothing else breaks
     _load = load
@@ -162,25 +134,7 @@ class VoiceAnalyzer:
     # Analysis
     # ------------------------------------------------------------------
 
-    def _predict_score(self, waveform: torch.Tensor) -> float:
-        waveform = waveform.unsqueeze(0).to(self._device)
-        with torch.no_grad():
-            score, _ = self._model(waveform)
-        return score.item()
 
-    def _sliding_window(self, waveform: torch.Tensor,
-                        window_sec: int = 5,
-                        stride_sec: int = 2):
-        window_len = VOICE_SAMPLE_RATE * window_sec
-        stride_len = VOICE_SAMPLE_RATE * stride_sec
-        scores, times = [], []
-        for start in range(0, len(waveform) - window_len, stride_len):
-            segment = waveform[start:start + window_len].unsqueeze(0).to(self._device)
-            with torch.no_grad():
-                score, _ = self._model(segment)
-            scores.append(score.item())
-            times.append(start / VOICE_SAMPLE_RATE)
-        return np.array(times), np.array(scores)
 
     @staticmethod
     def _extract_features(wav_path: str):
@@ -192,6 +146,56 @@ class VoiceAnalyzer:
         ).tolist()
         zcr = np.abs(np.diff(np.sign(wav))).astype(float).tolist()
         return energy, zcr
+
+    @staticmethod
+    def _extract_praat_features(wav_path: str) -> dict:
+        try:
+            import parselmouth
+            snd = parselmouth.Sound(wav_path)
+            
+            pitch = snd.to_pitch()
+            pitch_vals = pitch.selected_array['frequency']
+            pitch_vals = pitch_vals[pitch_vals > 0]
+            mean_pitch = float(np.mean(pitch_vals)) if len(pitch_vals) > 0 else 0.0
+            std_pitch = float(np.std(pitch_vals)) if len(pitch_vals) > 0 else 0.0
+            
+            intensity = snd.to_intensity()
+            int_vals = intensity.values[0, :]
+            mean_intensity = float(np.mean(int_vals)) if len(int_vals) > 0 else 0.0
+            
+            try:
+                pointProcess = parselmouth.praat.call(snd, "To PointProcess (periodic, cc)", 75, 500)
+                jitter = parselmouth.praat.call(pointProcess, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+                shimmer = parselmouth.praat.call([snd, pointProcess], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
+                if np.isnan(jitter): jitter = 0.0
+                if np.isnan(shimmer): shimmer = 0.0
+            except Exception:
+                jitter = 0.0
+                shimmer = 0.0
+                
+            threshold = mean_intensity
+            peaks = 0
+            for i in range(1, len(int_vals)-1):
+                if int_vals[i] > threshold and int_vals[i] > int_vals[i-1] and int_vals[i] > int_vals[i+1]:
+                    peaks += 1
+            
+            duration_mins = snd.duration / 60.0
+            wpm = float((peaks / 1.5) / duration_mins) if duration_mins > 0 else 0.0
+            
+            return {
+                "mean_pitch": round(mean_pitch, 2),
+                "std_pitch": round(std_pitch, 2),
+                "mean_intensity": round(mean_intensity, 2),
+                "jitter": round(jitter, 4),
+                "shimmer": round(shimmer, 4),
+                "wpm": round(wpm, 1)
+            }
+        except ImportError:
+            print("[VoiceAnalyzer] praat-parselmouth not installed.")
+            return {}
+        except Exception as e:
+            print(f"[VoiceAnalyzer] Praat error: {e}")
+            return {}
 
     # ------------------------------------------------------------------
     # Public interface
@@ -220,17 +224,10 @@ class VoiceAnalyzer:
                 str(Path(input_path).parent / f"voice_tmp_{session_id}.wav")
             )
 
-            waveform = self._load_waveform(wav_path)
-            score = self._predict_score(waveform)
-            times, window_scores = self._sliding_window(waveform)
-            energy, pitch_proxy = self._extract_features(wav_path)
+            praat_features = self._extract_praat_features(wav_path)
 
             return {
-                "score": round(score, 4),
-                "window_times": times.tolist(),
-                "window_scores": window_scores.tolist(),
-                "energy": energy,
-                "pitch_proxy": pitch_proxy,
+                "praat_features": praat_features,
                 "error": None
             }
         except Exception as e:
@@ -241,114 +238,9 @@ class VoiceAnalyzer:
 # Single shared instance
 voice_analyzer = VoiceAnalyzer()
 
-# ---------------------------------------------------------------------------
-# VideoInferenceAnalyzer — in-process VideoMAE confidence model
-# ---------------------------------------------------------------------------
-
-_ATEMPT2_ROOT = Path(__file__).parent.parent / "Atempt2"
-if str(_ATEMPT2_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ATEMPT2_ROOT))
-
-VIDEO_MODEL_PATH = str(_ATEMPT2_ROOT / "checkpoints" / "videoMAE_confidence_ranker_epoch6.pth")
-VIDEO_NUM_FRAMES = 16
-
-try:
-    from src.model.video_model import VideoModel as _VideoModel
-    _VIDEO_MODEL_CLASS_AVAILABLE = True
-except ImportError as _ve:
-    _VIDEO_MODEL_CLASS_AVAILABLE = False
-    print(f"[VideoAnalyzer] WARNING: could not import VideoModel: {_ve}")
-
-
-class _BaseVideoAnalyzer:
-    """Shared logic for in-process VideoMAE-based analyzers."""
-
-    def __init__(self, label: str, model_path: str):
-        self._label = label
-        self._model_path = model_path
-        self._model = None
-        self._processor = None
-        self._device = None
-        self._lock = threading.Lock()
-
-    def load(self):
-        if self._model is not None:
-            return True
-        with self._lock:
-            if self._model is not None:
-                return True
-            if not _VIDEO_MODEL_CLASS_AVAILABLE:
-                print(f"[{self._label}] VideoModel class unavailable — skipping load")
-                return False
-            if not os.path.exists(self._model_path):
-                print(f"[{self._label}] Model file not found: {self._model_path}")
-                return False
-            try:
-                self._device = "cuda" if torch.cuda.is_available() else "cpu"
-                print(f"[{self._label}] Loading model on {self._device}…")
-                self._processor = AutoImageProcessor.from_pretrained(
-                    "MCG-NJU/videomae-base", use_fast=False
-                )
-                self._model = _VideoModel()
-                if _model_has_meta_tensors(self._model):
-                    # Materialize lazy/meta tensors before loading checkpoint weights.
-                    self._model = self._model.to_empty(device="cpu")
-                ckpt = torch.load(self._model_path, map_location="cpu", weights_only=False)
-                state = ckpt.get("model_state_dict", ckpt)
-                self._model.load_state_dict(state)
-                self._model = self._model.to(self._device)
-                self._model.eval()
-                print(f"[{self._label}] Model ready on {self._device}")
-                return True
-            except Exception as e:
-                print(f"[{self._label}] ERROR loading model: {e}")
-                return False
-
-    def _extract_frames(self, video_path: str, num_frames: int = VIDEO_NUM_FRAMES) -> np.ndarray:
-        cap = cv2.VideoCapture(video_path)
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        if total == 0:
-            cap.release()
-            raise ValueError(f"Video has 0 frames: {video_path}")
-        indices = np.linspace(0, total - 1, num_frames, dtype=int)
-        frames = []
-        for idx in indices:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, int(idx))
-            ret, frame = cap.read()
-            if ret:
-                frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        cap.release()
-        if len(frames) == 0:
-            raise ValueError(f"Could not read any frames from: {video_path}")
-        # Pad if short
-        while len(frames) < num_frames:
-            frames.append(frames[-1])
-        return np.array(frames[:num_frames])
-
-    def _run_inference(self, video_path: str) -> float:
-        frames = self._extract_frames(video_path)
-        frames_list = [frame for frame in frames]
-        inputs = self._processor(frames_list, return_tensors="pt")
-        pixel_values = inputs["pixel_values"].to(self._device)
-        with torch.no_grad():
-            output = self._model(pixel_values)
-        return float(output.item())
-
-    def analyze(self, video_path: str, session_id: str = "tmp") -> dict:
-        if not self.load():
-            return {"score": None, "error": f"{self._label} model not available"}
-        try:
-            score = self._run_inference(video_path)
-            return {"score": round(score, 4), "error": None}
-        except Exception as e:
-            print(f"[{self._label}] ERROR: {e}")
-            return {"score": None, "error": str(e)}
-
-
-class VideoInferenceAnalyzer(_BaseVideoAnalyzer):
-    def __init__(self):
-        super().__init__("VideoMAE", VIDEO_MODEL_PATH)
-
+class VideoInferenceAnalyzer:
+    def load(self): return True
+    def analyze(self, p, s="tmp"): return {"score": None, "error": None}
 
 video_inference_analyzer = VideoInferenceAnalyzer()
 
@@ -366,6 +258,7 @@ class GazeAnalyzer:
     def __init__(self):
         self._available: bool = False
         self._lock = threading.Lock()
+        self._analyzer = None
 
     def load(self) -> bool:
         if self._available:
@@ -374,23 +267,21 @@ class GazeAnalyzer:
             if self._available:
                 return True
             try:
-                from vision import analyze_video  # noqa: F401
+                from l2cs_gaze import L2CSGazeAnalyzer
+                # Use absolute path to avoid cwd issues
+                weights_path = Path(__file__).parent / "models" / "L2CSNet_gaze360.pkl"
+                self._analyzer = L2CSGazeAnalyzer(weights_path=weights_path)
+                self._analyzer.load()
                 self._available = True
-                print("[GazeAnalyzer] Using vision.analyze_video (full model)")
+                print("[GazeAnalyzer] Using L2CS-Net gaze analyzer")
                 return True
             except Exception as exc:
-                print(f"[GazeAnalyzer] vision import failed — gaze tracking disabled: {exc}")
+                print(f"[GazeAnalyzer] l2cs_gaze import failed — gaze tracking disabled: {exc}")
                 return False
 
     @staticmethod
     def _transcode_to_mp4(input_path: str, session_id: str) -> str | None:
-        """Transcode input video to a reliable mp4 (H.264) for MediaPipe.
-
-        Browser MediaRecorder produces webm/VP8 which OpenCV can open but
-        MediaPipe often fails to detect faces in. Transcoding to H.264 mp4
-        fixes frame timing and codec issues. Returns the mp4 path, or None
-        on failure (caller falls back to original path).
-        """
+        """Transcode input video to a reliable mp4 (H.264) for L2CS."""
         out_path = str(Path(input_path).parent / f"gaze_tmp_{session_id}.mp4")
         _ffmpeg = os.environ.get("FFMPEG_PATH", "ffmpeg")
         cmd = [
@@ -413,20 +304,12 @@ class GazeAnalyzer:
         return None
 
     def analyze(self, video_path: str, session_id: str = "tmp") -> list:
-        """Process a video file and return gaze log entries.
-
-        Each entry: {'timestamp': str, 'status': str}
-        Delegates entirely to vision.analyze_video which writes the log file
-        and returns the list of entries (includes eye-only deviation statuses).
-
-        WebM files from the browser are transcoded to H.264 mp4 first —
-        MediaPipe face detection is unreliable on VP8/VP9 streams.
-        """
+        """Process a video file and return gaze log entries."""
         if not self._available:
             if not self.load():
                 return []
 
-        # Transcode webm → mp4 so MediaPipe gets reliable H.264 frames
+        # Transcode webm → mp4 so opencv gets reliable H.264 frames
         transcoded_path = None
         analysis_path = video_path
         if video_path.lower().endswith(".webm"):
@@ -437,8 +320,7 @@ class GazeAnalyzer:
                 print(f"[GazeAnalyzer:{session_id}] Transcode failed — trying original webm")
 
         try:
-            from vision import analyze_video
-            return analyze_video(analysis_path, session_id)
+            return self._analyzer.analyze_video(analysis_path)
         except Exception as exc:
             print(f"[GazeAnalyzer:{session_id}] ERROR: {exc}")
             return []
