@@ -1,3 +1,9 @@
 
-Interviewer: Alex:  That's a very insightful breakdown, Shrey. It sounds like you had to grapple with data accessibility and defining the right weighting factors for your prioritization. Let's shift gears a bit. Given your experience with deep learning segmentation, how would you approach building a robust object detection model for identifying specific types of potholes on a road?
-Candidate: Can we move on to the next phase?
+Interviewer: "Thanks, Michael. Hi Gaurav, I'm Kate, and I'll be taking over for the core technical portion of your interview. To start, can you explain the difference between `null` and `undefined` in JavaScript?"
+Candidate: Ok, so null are the objects which are already defined like I have defined object in x so it is of in digit type but I have not assigned any values to those objects or variables that are created and undefined is where I haven't defined it before and I am using the variable after. The variable after.
+
+Interviewer: Thanks for that explanation, Gaurav. To clarify, could you give me a quick example of when you might encounter `null` versus `undefined` in a practical scenario?
+Candidate: So suppose I am working on a project where I have to keep count of something, right? And I have coded, actually I don't know my back. Can you skip this phase please? I am just testing the system out.
+
+Interviewer: No worries at all, Gaurav. Thanks for letting me know. Let's shift gears then. Can you tell me about a time you had to debug a particularly tricky issue in a project?
+Candidate: Think we are done with core technical part. Can you skip this phase please?

@@ -58,7 +58,7 @@ export default function ResumeUploadModal({ onClose, onUploadSuccess }: ResumeUp
       formData.append('user_email', user.email || "");
       formData.append('user_full_name', displayName); // Sent from Auth, not AI
 
-      const response = await fetch('http://127.0.0.1:8001/api/parse-resume', {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/parse-resume`, {
         method: 'POST',
         body: formData,
       });

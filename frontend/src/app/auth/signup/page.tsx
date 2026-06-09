@@ -54,18 +54,18 @@ export default function Signup() {
       if (authError) throw authError;
 
       if (authData.user) {
-        // 3. Create the public profile row linked to this new user
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert([
-            { 
-              id: authData.user.id, 
-              email: authData.user.email,
-              full_name: fullname
-            }
-          ]);
+        // 3. Create the public profile row linked to this new user (LOCAL DB)
+        const profileResponse = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/profile`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: authData.user.id,
+            email: authData.user.email,
+            full_name: fullname
+          })
+        });
 
-        if (profileError) throw profileError;
+        if (!profileResponse.ok) throw new Error("Failed to create profile in local database");
 
         // 4. Success! Redirect to login (or directly to the interview dashboard)
         alert("Account created successfully!");

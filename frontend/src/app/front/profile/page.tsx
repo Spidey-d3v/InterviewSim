@@ -17,23 +17,23 @@ export default async function DashboardPage() {
     redirect('/auth/login');
   }
 
-  // Fetch past interview sessions for the user
-  const { data: sessions, error } = await supabase
-    .from('interview_sessions')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('❌ Error fetching sessions:', error);
+  // Fetch past interview sessions for the user from local API
+  let sessions = [];
+  try {
+    const sessRes = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/sessions/${user.id}`, { cache: 'no-store' });
+    if (sessRes.ok) sessions = await sessRes.json();
+  } catch (err) {
+    console.error('❌ Error fetching sessions:', err);
   }
 
-  // Fetch user profile for personalizing the dashboard
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+  // Fetch user profile from local API
+  let profile = null;
+  try {
+    const profRes = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/profile/${user.id}`, { cache: 'no-store' });
+    if (profRes.ok) profile = await profRes.json();
+  } catch (err) {
+    console.error('❌ Error fetching profile:', err);
+  }
 
   return (
     <DashboardClient 

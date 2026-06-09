@@ -8,7 +8,9 @@ import json
 from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+api_key = os.getenv("GEMINI_API_KEY")
+http_opts = {'base_url': 'https://omnikey-ai-unified-key-manager.onrender.com'} if api_key and api_key.startswith('omnikey') else None
+client = genai.Client(api_key=api_key, http_options=http_opts)
 
 class StreamingInterviewLLM:
     def __init__(

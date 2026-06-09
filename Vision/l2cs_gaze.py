@@ -15,7 +15,7 @@ from l2cs import Pipeline
 WINDOW_SIZE = 30
 PERFECT_GAZE_THRESHOLD = 0.10
 LOST_GAZE_THRESHOLD = 0.35
-TARGET_SAMPLE_FPS = 10.0
+TARGET_SAMPLE_FPS = 2.0
 
 
 def get_frame_score(yaw: float, pitch: float) -> float:
@@ -87,8 +87,15 @@ class L2CSGazeAnalyzer:
                     continue
 
                 elapsed = frame_index / fps
-                results = self._pipeline.step(frame)
-                face_count = len(results.yaw) if results is not None else 0
+                try:
+                    results = self._pipeline.step(frame)
+                    face_count = len(results.yaw) if results is not None else 0
+                except ValueError as e:
+                    if "need at least one array to stack" in str(e):
+                        results = None
+                        face_count = 0
+                    else:
+                        raise
 
                 if face_count == 0:
                     frame_score = 0.0

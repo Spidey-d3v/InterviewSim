@@ -82,9 +82,7 @@ export default function InterviewRoom() {
   // -- Core Logic Hooks --
   const {
     isConnected: visionConnected,
-    latestConfidence,
     chunkResults,
-    latestVoiceScore,
     pendingChunks,
     chunkErrors,
     dismissChunkError,
@@ -184,7 +182,7 @@ export default function InterviewRoom() {
           candidate_answer: candidateAnswerMapRef.current[qCtx.question_index],
           phase: qCtx.phase,
           chunks: [],
-          question_averages: { confidence_score: null, voice_score: null },
+          question_averages: { wpm: null, focus: null },
         });
       }
 
@@ -194,9 +192,7 @@ export default function InterviewRoom() {
         chunk_index: chunk.chunkIndex,
         question_index: qCtx.question_index,
         question_text: qCtx.question_text,
-        confidence_score: (chunk.predictions.length > 0 ? chunk.predictions.at(-1)?.confidence : null) ?? null,
-        voice_score: chunk.voice_analysis?.score ?? null,
-        praat_features: chunk.voice_analysis?.praat_features ?? null,
+        praat_features: null,
         gaze_distribution: buildChunkGazeDistribution(chunk),
         smart_turn_probability: null,
         smart_turn_is_complete: null,
@@ -208,31 +204,35 @@ export default function InterviewRoom() {
     // 2. Calculate the ACTUAL averages for each question group
     const metrics = Array.from(grouped.values());
     metrics.forEach((m) => {
-      const confs = m.chunks.map(c => c.confidence_score);
-      const voices = m.chunks.map(c => c.voice_score);
 
-      let totalForward = 0;
-      let totalGaze = 0;
-      m.chunks.forEach(c => {
-        const d = c.gaze_distribution;
-        if (d) {
-          const chunkTotal = d.forward + d.left + d.right + d.down + d.away;
-          totalForward += d.forward;
-          totalGaze += chunkTotal;
-        }
+      let sumFrameScore = 0;
+      let countFrameScore = 0;
+
+      const rawChunksForQuestion = chunkResults.filter(
+        cr => (chunkQuestionMapRef.current[cr.chunkId]?.question_index || 0) === m.question_index
+      );
+
+      rawChunksForQuestion.forEach(cr => {
+        cr.gaze_data.forEach(g => {
+          if (g.frame_score !== undefined) {
+            sumFrameScore += g.frame_score;
+            countFrameScore++;
+          }
+        });
       });
-      const focusVal = totalGaze > 0 ? (totalForward / totalGaze) * 100 : null;
+
+      const focusVal = countFrameScore > 0 ? sumFrameScore / countFrameScore : null;
+
+      const totalFrames = rawChunksForQuestion.reduce((acc, cr) => acc + cr.gaze_data.length, 0);
 
       let wpmVal: number | null = null;
-      if (m.candidate_answer && totalGaze > 0) {
+      if (m.candidate_answer && totalFrames > 0) {
         const wordCount = m.candidate_answer.trim().split(/\s+/).filter(w => w.length > 0).length;
-        const durationMinutes = (totalGaze / 27) / 60; // 27 fps from vision_server
+        const durationMinutes = (totalFrames / (27 / 14)) / 60; // 27 fps transcoded, sampled every 14 frames
         wpmVal = durationMinutes > 0.05 ? Math.round(wordCount / durationMinutes) : null;
       }
 
-      (m as any).question_averages = {
-        confidence_score: mean(confs),
-        voice_score: mean(voices),
+      m.question_averages = {
         wpm: wpmVal,
         focus: focusVal,
       };

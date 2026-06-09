@@ -105,10 +105,7 @@ export default function ResultsModal({
     let focusedGaze = 0;
 
     chunkResults.forEach((c) => {
-      if (c.gaze_summary) {
-        totalGaze += c.gaze_summary.total_frames || 0;
-        focusedGaze += (c.gaze_summary.looking_forward || 0);
-      } else if (c.gaze_data && c.gaze_data.length > 0) {
+      if (c.gaze_data && c.gaze_data.length > 0) {
         totalGaze += c.gaze_data.length;
         focusedGaze += c.gaze_data.filter((e) => {
           const s = (e.status || '').toLowerCase();
@@ -119,16 +116,55 @@ export default function ResultsModal({
 
     const focusPct = totalGaze > 0 ? (focusedGaze / totalGaze) * 100 : 0;
 
-    const voiceVals = chunkResults.map(c => c.voice_analysis?.score).filter((v): v is number => typeof v === 'number');
-    const confVals = chunkResults.flatMap(c => c.predictions.map(p => p.confidence)).filter((v): v is number => typeof v === 'number');
-
-    const avgVoice = voiceVals.length > 0 ? (voiceVals.reduce((a, b) => a + b, 0) / voiceVals.length) * 10 : 0;
-    const avgConf = confVals.length > 0 ? (confVals.reduce((a, b) => a + b, 0) / confVals.length) * 10 : 0;
+    const avgVoice = 0;
+    const avgConf = 0;
 
     // 2. Render Header
     drawHeader();
 
-    y += 20;
+    // Aggregate filler words globally
+    const globalFillers: Record<string, number> = {};
+    if (finalScores) {
+      Object.values(finalScores).forEach((ps: any) => {
+        if (ps.filler_words) {
+          Object.entries(ps.filler_words).forEach(([w, c]) => {
+            const word = w.toLowerCase();
+            globalFillers[word] = (globalFillers[word] || 0) + (c as number);
+          });
+        }
+      });
+    }
+
+    if (Object.keys(globalFillers).length > 0) {
+        y += 5;
+        pdf.setFillColor(254, 242, 242);
+        pdf.rect(margin, y, contentWidth, 45, 'F');
+        pdf.setDrawColor(239, 68, 68);
+        pdf.setLineWidth(3);
+        pdf.line(margin, y, margin, y + 45);
+
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(8);
+        pdf.setTextColor(153, 27, 27);
+        pdf.text('INTERVIEW-WIDE VERBAL HABITS (FILLER WORDS)', margin + 15, y + 15);
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(185, 28, 28);
+        const fillers = Object.entries(globalFillers)
+          .sort((a, b) => b[1] - a[1]) // Sort by frequency
+          .map(([w, c]) => `${w.toUpperCase()}: ${c}`)
+          .join('  |  ');
+        
+        const fillerLines = pdf.splitTextToSize(fillers, contentWidth - 30);
+        fillerLines.forEach((line: string, i: number) => {
+           pdf.text(line, margin + 15, y + 30 + (i * 10));
+        });
+        
+        y += 45 + (fillerLines.length > 1 ? 10 * fillerLines.length : 15);
+    } else {
+        y += 20;
+    }
 
     // 4. Phase Analysis
     pdf.setFont('helvetica', 'bold');
@@ -160,31 +196,9 @@ export default function ResultsModal({
       pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
       pdf.text(phase.toUpperCase().replace(/_/g, ' '), margin + 15, y);
       
-      if (pScores) {
-        pdf.setTextColor(COLORS.PINK[0], COLORS.PINK[1], COLORS.PINK[2]);
-        pdf.text(`EFFICIENCY: ${pScores.overall || 0}/10`, margin + contentWidth - 15, y, { align: 'right' });
-      }
       y += 10;
       pdf.line(margin + 15, y, margin + contentWidth - 15, y);
       y += 20;
-
-      // Metrics Badges
-      if (pScores?.metrics) {
-        let badgeX = margin + 15;
-        Object.entries(pScores.metrics).forEach(([k, v]) => {
-          const txt = `${k.replace(/_/g, ' ')}: ${v}/10`.toUpperCase();
-          const tw = pdf.getTextWidth(txt) + 10;
-          if (badgeX + tw > margin + contentWidth - 15) { badgeX = margin + 15; y += 20; }
-          
-          pdf.setFillColor(243, 244, 246);
-          pdf.rect(badgeX, y - 10, tw, 14, 'F');
-          pdf.setFontSize(7);
-          pdf.setTextColor(75, 85, 99);
-          pdf.text(txt, badgeX + 5, y);
-          badgeX += tw + 8;
-        });
-        y += 20;
-      }
 
       // Advice Box
       if (pScores?.advice && pScores.advice.length > 0) {
@@ -211,29 +225,7 @@ export default function ResultsModal({
         y += boxHeight + 15;
       }
 
-      // --- ADDED: Filler Words Summary ---
-      if (pScores?.filler_words && Object.keys(pScores.filler_words).length > 0) {
-        ensureSpace(60);
-        pdf.setFillColor(254, 242, 242);
-        pdf.rect(margin + 15, y, contentWidth - 30, 45, 'F');
-        pdf.setDrawColor(239, 68, 68);
-        pdf.setLineWidth(3);
-        pdf.line(margin + 15, y, margin + 15, y + 45);
 
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(8);
-        pdf.setTextColor(153, 27, 27);
-        pdf.text('VERBAL HABITS (FILLER WORDS)', margin + 25, y + 15);
-
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(185, 28, 28);
-        const fillers = Object.entries(pScores.filler_words)
-          .map(([w, c]) => `${w.toUpperCase()}: ${c}`)
-          .join('  |  ');
-        pdf.text(fillers, margin + 25, y + 30);
-        y += 60;
-      }
 
       // --- ADDED: Question Detail & Transcript ---
       phaseQs.forEach((q) => {
@@ -269,7 +261,7 @@ export default function ResultsModal({
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7.5);
         pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
-        const camActivity = q.question_averages.focus != null ? ((q.question_averages.focus / 100) * 5).toFixed(1) + '/5' : 'N/A';
+        const camActivity = q.question_averages.focus != null ? q.question_averages.focus.toFixed(1) + '/5' : 'N/A';
         pdf.text(`Camera Activity: ${camActivity}  |  WPM: ${q.question_averages.wpm != null ? Math.round(q.question_averages.wpm) : 'N/A'}`, margin + 25, y);
         y += 20;
       });
@@ -277,74 +269,7 @@ export default function ResultsModal({
       y += 10;
     }
 
-    // --- Voice Modulation Graph (Pitch) ---
-    // Extract pitch values chronologically across all questions
-    const pitchData: number[] = [];
-    metrics.forEach(q => {
-      q.chunks.forEach(c => {
-        if (c.praat_features && c.praat_features.mean_pitch > 0) {
-          pitchData.push(c.praat_features.mean_pitch);
-        }
-      });
-    });
 
-    if (pitchData.length > 1) {
-      ensureSpace(120);
-      pdf.setDrawColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
-      pdf.setLineWidth(2);
-      pdf.line(margin, y, margin + 120, y);
-      y += 20;
-
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(14);
-      pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
-      pdf.text('VOICE MODULATION PROFILE (PITCH)', margin, y);
-      y += 20;
-
-      // Draw Graph Area
-      const graphWidth = contentWidth;
-      const graphHeight = 60;
-      const graphX = margin;
-      const graphY = y;
-
-      pdf.setFillColor(249, 250, 251); // Gray bg
-      pdf.rect(graphX, graphY, graphWidth, graphHeight, 'F');
-      
-      const maxPitch = Math.max(...pitchData) + 20;
-      const minPitch = Math.max(0, Math.min(...pitchData) - 20);
-      const pitchRange = maxPitch - minPitch;
-
-      const stepX = graphWidth / (pitchData.length - 1);
-      
-      pdf.setDrawColor(COLORS.EMERALD[0], COLORS.EMERALD[1], COLORS.EMERALD[2]);
-      pdf.setLineWidth(1.5);
-      
-      let prevX = graphX;
-      let prevY = graphY + graphHeight - ((pitchData[0] - minPitch) / pitchRange) * graphHeight;
-
-      for (let i = 1; i < pitchData.length; i++) {
-        const currX = graphX + (i * stepX);
-        const currY = graphY + graphHeight - ((pitchData[i] - minPitch) / pitchRange) * graphHeight;
-        
-        pdf.line(prevX, prevY, currX, currY);
-        
-        // Draw point
-        pdf.setFillColor(COLORS.EMERALD[0], COLORS.EMERALD[1], COLORS.EMERALD[2]);
-        pdf.circle(currX, currY, 1.5, 'F');
-        if (i === 1) pdf.circle(prevX, prevY, 1.5, 'F'); // draw first point
-        
-        prevX = currX;
-        prevY = currY;
-      }
-
-      pdf.setFontSize(8);
-      pdf.setTextColor(150, 150, 150);
-      pdf.text(`${Math.round(maxPitch)} Hz`, graphX + graphWidth + 2, graphY + 5);
-      pdf.text(`${Math.round(minPitch)} Hz`, graphX + graphWidth + 2, graphY + graphHeight);
-      pdf.text('Time (Chunks)', graphX + (graphWidth/2) - 15, graphY + graphHeight + 10);
-      
-      y += graphHeight + 25;
-    }
 
     if (v2Feedback?.version === 2) {
       ensureSpace(120);
@@ -441,10 +366,8 @@ export default function ResultsModal({
         </div>
 
         <div className="p-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <StatCard label="Camera Activity" value={`${((liveFocusPct / 100) * 5).toFixed(1)}/5`} color="blue" />
-            <StatCard label="Voice Skills" value={scoreCell(mean(chunkResults.map(c => c.voice_analysis?.score)))} color="emerald" />
-            <StatCard label="Avg Confidence" value={scoreCell(mean(chunkResults.flatMap(c => c.predictions.map(p => p.confidence))))} color="purple" />
           </div>
 
           <div className="bg-white/5 p-4 rounded-lg border border-white/10 max-h-64 overflow-y-auto">
@@ -453,14 +376,9 @@ export default function ResultsModal({
               {chunkResults.map((chunk, idx) => {
                 const counts = getChunkGazeCounts(chunk);
                 return (
-                  <div key={`${chunk.chunkId}-${idx}`} className="text-xs p-3 rounded bg-white/5 border border-white/10">
-                    <div className="flex justify-between items-center">
-                      <span className="font-mono text-gray-400">Chunk {idx + 1}</span>
-                      <div className="flex gap-3">
-                        <MetricSpan label="Voice" val={chunk.voice_analysis?.score} color="emerald" />
-                        <span className="text-gray-400">Gaze: {counts.focused}/{counts.total}</span>
-                      </div>
-                    </div>
+                  <div key={`${chunk.chunkId}-${idx}`} className="text-xs p-3 rounded bg-white/5 border border-white/10 flex justify-between items-center">
+                     <span className="font-mono text-gray-400">Chunk {idx + 1}</span>
+                     <span className="text-gray-400">Gaze: {counts.focused}/{counts.total}</span>
                   </div>
                 );
               })}

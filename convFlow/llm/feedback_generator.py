@@ -6,7 +6,9 @@ from pathlib import Path
 
 load_dotenv(dotenv_path=Path(__file__).parent.parent.parent / ".env")
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+api_key = os.getenv("GEMINI_API_KEY")
+http_opts = {'base_url': 'https://omnikey-ai-unified-key-manager.onrender.com'} if api_key and api_key.startswith('omnikey') else None
+client = genai.Client(api_key=api_key, http_options=http_opts)
 
 def generate_v2_feedback(metrics_data: list, total_questions: int, total_chunks: int) -> dict:
     """
@@ -70,7 +72,14 @@ Generate the JSON now:
             },
         )
         if response.text:
-            return json.loads(response.text)
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            elif text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            return json.loads(text.strip())
     except Exception as e:
         print(f"❌ Error generating V2 feedback: {e}")
         

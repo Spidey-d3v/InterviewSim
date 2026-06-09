@@ -23,11 +23,6 @@ const PDFDownloadLink = dynamicImport(
   { ssr: false }
 );
 
-const ReportPDF = dynamicImport(
-  () => import('../../../component/interview/ReportPDF').then((mod) => mod.ReportPDF),
-  { ssr: false }
-);
-
 interface SessionDrawerProps {
   session: any;
   onClose: () => void;
@@ -318,28 +313,13 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
 
         {/* Footer Actions */}
         <div className="p-8 border-t border-white/5 bg-white/[0.01]">
-          {isV2 ? (
-            <PDFDownloadLink
-              document={<ReportPDF session={session} metrics={rawMetrics} />}
-              fileName={`interview-report-${session.session_id.slice(0, 8)}.pdf`}
-              className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl font-black text-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-3 shadow-xl shadow-purple-500/20"
-            >
-              {({ loading }) => (
-                <>
-                  <Download size={20} />
-                  {loading ? 'PREPARING DOSSIER...' : 'GENERATE FULL PDF DOSSIER'}
-                </>
-              )}
-            </PDFDownloadLink>
-          ) : (
             <button 
               disabled
               className="w-full py-4 bg-white/5 rounded-2xl font-black text-lg text-gray-500 cursor-not-allowed flex items-center justify-center gap-3 border border-white/5"
             >
               <Download size={20} />
-              LEGACY SESSION (NO PDF)
+              PDF DOSSIER ONLY AVAILABLE POST-INTERVIEW
             </button>
-          )}
         </div>
       </motion.div>
     </>

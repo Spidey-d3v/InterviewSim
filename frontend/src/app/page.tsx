@@ -50,17 +50,17 @@ export default function LandingPage() {
 
     setIsLoggedIn(true);
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('resume_text, resume_json')
-      .eq('id', authData.user.id)
-      .maybeSingle();
-
-    if (profile) {
-      const hasText = !!(profile.resume_text?.trim());
-      const hasJson = !!profile.resume_json;
-      setHasResume(hasText || hasJson);
-    } else {
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/profile/${authData.user.id}`);
+      if (res.ok) {
+        const profile = await res.json();
+        const hasText = !!(profile.resume_text?.trim());
+        const hasJson = !!profile.resume_json;
+        setHasResume(hasText || hasJson);
+      } else {
+        setHasResume(false);
+      }
+    } catch (err) {
       setHasResume(false);
     }
   }, [supabase]);

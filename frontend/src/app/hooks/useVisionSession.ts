@@ -12,57 +12,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export interface GazeLogEntry {
   timestamp: string;
   status: string;
-}
-
-export interface PredictionEntry {
-  chunk: number;
-  video_file: string;
-  confidence: number;
-  timestamp: number;
-  processing_time: number;
-}
-
-export interface PredictionSummary {
-  count: number;
-  mean_confidence: number;
-  min_confidence: number;
-  max_confidence: number;
-}
-
-export interface VoiceAnalysis {
-  praat_features?: Record<string, number> | null;
-  error?: string | null;
-}
-
-export interface GazeSummary {
-  total_frames: number;
-  looking_forward: number;
-  looking_left: number;
-  looking_right: number;
-  looking_away: number;
-  looking_forward_pct: number;
-  looking_left_pct: number;
-  looking_right_pct: number;
-  looking_away_pct: number;
+  frame_score?: number;
 }
 
 export interface ChunkResult {
   chunkId: string;
   chunkIndex: number;
   gaze_data: GazeLogEntry[];
-  gaze_summary: GazeSummary | null;
-  predictions: PredictionEntry[];
-  inference_summary: PredictionSummary | null;
-  voice_analysis: VoiceAnalysis | null;
   receivedAt: string;
 }
 
 export interface SessionData {
   session_id: string;
   log_data: GazeLogEntry[];
-  predictions: PredictionEntry[];
-  summary: PredictionSummary;
-  voice_analysis: VoiceAnalysis | null;
   start_time: string;
   end_time: string;
 }
@@ -74,14 +36,8 @@ export function useVisionSession() {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Real-time prediction state (full-session mode)
-  const [predictions, setPredictions] = useState<PredictionEntry[]>([]);
-  const [predictionSummary, setPredictionSummary] = useState<PredictionSummary | null>(null);
-  const [latestConfidence, setLatestConfidence] = useState<number | null>(null);
-
   // Per-chunk results (chunked recording mode)
   const [chunkResults, setChunkResults] = useState<ChunkResult[]>([]);
-  const [latestVoiceScore, setLatestVoiceScore] = useState<number | null>(null);
   const [processingChunks, setProcessingChunks] = useState<Set<string>>(new Set());
   const [chunkErrors, setChunkErrors] = useState<string[]>([]);
 
@@ -151,33 +107,12 @@ export function useVisionSession() {
             setCurrentSessionId(message.session_id);
             setIsSessionActive(true);
             setSessionData(null);
-            setPredictions([]);
-            setPredictionSummary(null);
-            setLatestConfidence(null);
-            break;
-            
-          case 'prediction_update':
-            console.log('📊 New prediction:', message.prediction);
-            setPredictions(prev => [...prev, message.prediction]);
-            setLatestConfidence(message.prediction.confidence);
-            break;
-            
-          case 'prediction_summary':
-            console.log('📈 Prediction summary:', message.summary);
-            setPredictionSummary(message.summary);
             break;
             
           case 'session_ended':
             console.log('✓ Session ended:', message.session_id);
             console.log('  Log entries:', message.log_data.length);
-            console.log('  Predictions:', message.predictions?.length || 0);
-            if (message.voice_analysis?.score != null) {
-              console.log('  Voice score:', message.voice_analysis.score);
-              setLatestVoiceScore(message.voice_analysis.score);
-            }
             setSessionData(message);
-            setPredictions(message.predictions || []);
-            setPredictionSummary(message.summary || null);
             setIsSessionActive(false);
             setCurrentSessionId(null);
             break;
@@ -194,35 +129,16 @@ export function useVisionSession() {
             }
 
             seenChunkIdsRef.current.add(message.chunk_id);
-            // Strip bulky arrays (energy, pitch_proxy) from voice_analysis before storing
-            const rawVoice = message.voice_analysis;
-            const voice_analysis: VoiceAnalysis | null = rawVoice
-              ? {
-                  praat_features: rawVoice.praat_features ?? null,
-                  error: rawVoice.error ?? null,
-                }
-              : null;
             const result: ChunkResult = {
               chunkId: message.chunk_id,
               chunkIndex: message.chunk_index ?? 0,
               gaze_data: message.gaze_data || [],
-              gaze_summary: message.gaze_summary || null,
-              predictions: message.predictions || [],
-              inference_summary: message.inference_summary || null,
-              voice_analysis,
               receivedAt: new Date().toISOString(),
             };
             console.log(
-              `📦 Chunk processed: ${result.chunkId} | voice=${result.voice_analysis?.score?.toFixed(3)} | confidence=${result.predictions[0]?.confidence?.toFixed(3)} | gaze=${result.gaze_data.length} events`
+              `📦 Chunk processed: ${result.chunkId} | gaze=${result.gaze_data.length} events`
             );
             setChunkResults((prev) => [...prev, result]);
-            if (result.voice_analysis?.score != null) {
-              setLatestVoiceScore(result.voice_analysis.score);
-            }
-            if (result.predictions.length > 0) {
-              const lastConf = result.predictions[result.predictions.length - 1].confidence;
-              setLatestConfidence(lastConf);
-            }
             setProcessingChunks((prev) => {
               const next = new Set(prev);
               next.delete(message.chunk_id);
@@ -411,17 +327,11 @@ export function useVisionSession() {
 
     // Per-chunk state
     chunkResults,
-    latestVoiceScore,
     processingChunks,
     pendingChunks: processingChunks.size,
     chunkErrors,
     clearChunkErrors,
     dismissChunkError,
-    
-    // Real-time prediction state
-    predictions,
-    predictionSummary,
-    latestConfidence,
     
     // Actions
     startSession,

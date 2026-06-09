@@ -7,8 +7,6 @@ import { getChunkGazeCounts } from '../../../utils/interview-metrics';
 interface AnalyticsPanelProps {
   isVisible: boolean;
   chunkResults: ChunkResult[];
-  latestConfidence: number | null;
-  latestVoiceScore: number | null;
   pendingChunks: number;
   pendingUploads: number;
   isChunkRecording: boolean;
@@ -17,8 +15,6 @@ interface AnalyticsPanelProps {
 export default function AnalyticsPanel({
   isVisible,
   chunkResults,
-  latestConfidence,
-  latestVoiceScore,
   pendingChunks,
   pendingUploads,
   isChunkRecording,
@@ -53,13 +49,6 @@ export default function AnalyticsPanel({
           color="bg-purple-500"
         />
 
-        {/* Voice */}
-        <MetricSection
-          label="Voice Skills"
-          value={latestVoiceScore !== null ? `${(latestVoiceScore * 100).toFixed(1)}%` : 'Waiting…'}
-          percent={latestVoiceScore !== null ? latestVoiceScore * 100 : 0}
-          color="bg-gradient-to-r from-emerald-500 to-teal-400"
-        />
 
         {/* Tips */}
         <div className="mt-6 p-4 rounded-lg bg-white/5 border border-white/10">

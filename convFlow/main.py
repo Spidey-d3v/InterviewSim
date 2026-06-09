@@ -24,16 +24,16 @@ import fitz
 import httpx
 import os
 from dotenv import load_dotenv
-from supabase import create_client, Client
+from fastapi import FastAPI, Depends, UploadFile, File, Form, BackgroundTasks
+from sqlalchemy.orm import Session
+from database import get_db
+from models import Profile, InterviewSession
+import uuid
 
 from pathlib import Path
 load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
-# Initialize Supabase
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 LIVEKIT_URL = os.getenv("LIVEKIT_URL", "ws://localhost:7880")
 API_KEY = os.getenv("LIVEKIT_API_KEY", "devkey")
@@ -292,7 +292,8 @@ ROLE_PRESETS = {
 async def token(
     user_id: str | None = Query(default=None),
     role: str | None = Query(default=None),
-    panel_size: int = Query(default=1) # New parameter
+    panel_size: int = Query(default=1), # New parameter
+    db: Session = Depends(get_db)
 ):
     room_name = f"interview_{uuid4().hex}"
     identity = "browser-user"
@@ -301,23 +302,13 @@ async def token(
     candidate_name = ""
     if user_id:
         try:
-            profile_res = (
-                supabase.table("profiles")
-                .select("resume_text, resume_json, full_name")
-                .eq("id", user_id)
-                .limit(1)
-                .execute()
-            )
-
-            profile = None
-            if profile_res.data:
-                profile = profile_res.data[0] if isinstance(profile_res.data, list) else profile_res.data
-
+            profile = db.query(Profile).filter(Profile.id == user_id).first()
+            
             if profile:
                 print(f"📊 [DEBUG] Found profile for user_id {user_id}")
                 
-                resume_text = (profile.get("resume_text") or "").strip()
-                resume_json = profile.get("resume_json")
+                resume_text = (profile.resume_text or "").strip()
+                resume_json = profile.resume_json
                 
                 print(f"📊 [DEBUG] resume_json keys: {list(resume_json.keys()) if isinstance(resume_json, dict) else 'Not a dict'}")
                 print(f"📊 [DEBUG] resume_text length: {len(resume_text)} chars")
@@ -328,7 +319,7 @@ async def token(
                 
                 # Fallback to profile name only if resume name is missing
                 if not candidate_name:
-                    candidate_name = profile.get("full_name") or ""
+                    candidate_name = profile.full_name or ""
 
                 print(f"📊 [DEBUG] Resolved candidate_name: '{candidate_name}'")
 
@@ -595,7 +586,8 @@ async def parse_resume(
     file: UploadFile = File(...), 
     user_id: str = Form(...),
     user_email: str = Form(...),
-    user_full_name: str = Form(...) # Received from Auth metadata
+    user_full_name: str = Form(...), # Received from Auth metadata
+    db: Session = Depends(get_db)
 ):
     try:
         # 1. Text Extraction
@@ -605,7 +597,8 @@ async def parse_resume(
         doc.close()
 
         # 2. AI Parsing
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
+        base_url = "https://omnikey-ai-unified-key-manager.onrender.com" if GEMINI_API_KEY.startswith("omnikey") else "https://generativelanguage.googleapis.com"
+        url = f"{base_url}/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
         
         payload = {
             "contents": [{
@@ -622,17 +615,27 @@ async def parse_resume(
 
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, timeout=40.0)
-            ai_data = json.loads(response.json()['candidates'][0]['content']['parts'][0]['text'])
+            text = response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            elif text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+            ai_data = json.loads(text.strip())
 
         # 3. Database Upsert
-        supabase.table("profiles").upsert({
-            "id": user_id, 
-            "email": user_email,           # Auth Email
-            "full_name": user_full_name,   # Auth Name
-            "resume_text": raw_text,
-            "resume_json": ai_data,
-            "updated_at": "now()"
-        }).execute()
+        profile = db.query(Profile).filter(Profile.id == user_id).first()
+        if not profile:
+            profile = Profile(id=user_id)
+            db.add(profile)
+        
+        profile.email = user_email
+        profile.full_name = user_full_name
+        profile.resume_text = raw_text
+        profile.resume_json = ai_data
+        
+        db.commit()
 
         return {"status": "success", "data": ai_data}
 
@@ -642,7 +645,10 @@ async def parse_resume(
 
 
 @app.post("/api/interview-sessions/finalize")
-async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
+async def finalize_interview_session(
+    payload: FinalizeInterviewSessionPayload,
+    db: Session = Depends(get_db)
+):
     try:
         all_chunks: list[ChunkMetricModel] = []
         for question in payload.question_metrics_json:
@@ -664,14 +670,11 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
         total_focus = 0
         total_gaze_frames = 0
         voice_scores = []
-        confidences = []
         gaze_dist = {"forward": 0, "left": 0, "right": 0, "down": 0, "away": 0}
 
         for c in all_chunks:
             if c.voice_score is not None:
                 voice_scores.append(c.voice_score)
-            if c.confidence_score is not None:
-                confidences.append(c.confidence_score)
             
             g = c.gaze_distribution
             chunk_gaze_total = g.forward + g.left + g.right + g.down + g.away
@@ -684,18 +687,8 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
                 total_gaze_frames += chunk_gaze_total
                 total_focus += g.forward
 
-        # Calculate overall WPM using Whisper text and Gaze duration
-        total_words = 0
-        for q in payload.question_metrics_json:
-            if q.candidate_answer:
-                total_words += len([w for w in q.candidate_answer.strip().split() if w])
-        
-        overall_duration_minutes = (total_gaze_frames / 27) / 60
-        
         row["overall_gaze_distribution"] = gaze_dist
         row["average_focus"] = (total_focus / total_gaze_frames) if total_gaze_frames > 0 else 0.0
-        row["average_wpm"] = (total_words / overall_duration_minutes) if overall_duration_minutes > 0.05 else 0.0
-        row["overall_camera_engagement"] = (sum(confidences) / len(confidences)) if confidences else 0.0
 
         try:
             from llm.feedback_generator import generate_v2_feedback
@@ -709,24 +702,29 @@ async def finalize_interview_session(payload: FinalizeInterviewSessionPayload):
             row["llm_evaluation_json"] = payload.llm_evaluation_json
 
         try:
-            supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
+            session = db.query(InterviewSession).filter(InterviewSession.session_id == payload.session_id).first()
+            if not session:
+                session = InterviewSession(session_id=payload.session_id, user_id=payload.user_id)
+                db.add(session)
+            
+            session.started_at = payload.started_at
+            session.completed_at = payload.completed_at
+            session.question_metrics_json = row["question_metrics_json"]
+            session.total_questions = row["total_questions"]
+            session.total_chunks = row["total_chunks"]
+            session.overall_gaze_distribution = row["overall_gaze_distribution"]
+            session.average_focus = row["average_focus"]
+            
+            if "recommendation_v2" in row:
+                session.recommendation_v2 = row["recommendation_v2"]
+                
+            if payload.llm_evaluation_json:
+                session.llm_evaluation_json = payload.llm_evaluation_json
+                
+            db.commit()
         except Exception as db_err:
-            # Fallback for missing columns
-            err_msg = str(db_err)
-            if "llm_evaluation_json" in err_msg or "PGRST204" in err_msg:
-                print("⚠️ Supabase column 'llm_evaluation_json' missing. Retrying with 'llm_evaluation'...")
-                if "llm_evaluation_json" in row:
-                    row["llm_evaluation"] = row.pop("llm_evaluation_json")
-                try:
-                    supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
-                except Exception as db_err2:
-                    print(f"⚠️ Retrying without evaluation/recommendation columns: {db_err2}")
-                    row.pop("llm_evaluation", None)
-                    row.pop("llm_evaluation_json", None)
-                    row.pop("recommendation_v2", None)
-                    supabase.table("interview_sessions").upsert(row, on_conflict="session_id").execute()
-            else:
-                raise db_err
+            db.rollback()
+            raise db_err
 
         return {
             "status": "success",
@@ -968,3 +966,33 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                         state["tts_busy"] = False
             elif state["smart_turn_cooldown"] > 0:
                 state["smart_turn_cooldown"] -= 1
+
+# ==========================================
+# REST API FOR FRONTEND DATA (LOCAL HYBRID)
+# ==========================================
+
+class ProfileCreate(BaseModel):
+    id: str
+    full_name: str
+    email: str
+
+@app.post("/api/profile")
+def create_profile(profile: ProfileCreate, db: Session = Depends(get_db)):
+    db_profile = db.query(Profile).filter(Profile.id == profile.id).first()
+    if not db_profile:
+        db_profile = Profile(id=profile.id, full_name=profile.full_name, email=profile.email)
+        db.add(db_profile)
+        db.commit()
+    return {"status": "success"}
+
+@app.get("/api/profile/{user_id}")
+def get_profile(user_id: str, db: Session = Depends(get_db)):
+    profile = db.query(Profile).filter(Profile.id == user_id).first()
+    if profile:
+        return profile
+    raise HTTPException(status_code=404, detail="Profile not found")
+
+@app.get("/api/sessions/{user_id}")
+def get_sessions(user_id: str, db: Session = Depends(get_db)):
+    sessions = db.query(InterviewSession).filter(InterviewSession.user_id == user_id).order_by(InterviewSession.created_at.desc()).all()
+    return sessions

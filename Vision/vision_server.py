@@ -3,10 +3,9 @@ Vision Gaze Tracking WebSocket Server
 
 This server manages vision.py sessions and communicates with the Next.js frontend.
 - Accepts uploaded video files via POST /upload_video
-- Starts/stops vision.py subprocess in offline batch mode (--video required)
-- Starts/stops realtime_inference.py for VideoMAE confidence prediction
-- Manages session-specific log files
-- Sends gaze data and confidence predictions to frontend via WebSocket
+- Receives uploaded video chunks or paths
+- Spawns vision.py to perform local gaze tracking via l2cs-net
+- Streams live gaze data, and final gaze summary back to frontend via WebSockets
 
 New model (offline/batch):
   Frontend uploads video  →  POST /upload_video  →  receives video_path
@@ -47,23 +46,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from transformers import AutoImageProcessor
 
 # ---------------------------------------------------------------------------
-# Voice module path — add Voice_Evaluation_PRJ3 to sys.path so we can import
-# the VoiceWav2VecModel class without installing it as a package
+# Voice module and Atempt2 module have been removed
 # ---------------------------------------------------------------------------
-_VOICE_ROOT = Path(__file__).parent.parent / "Voice_Evaluation_PRJ3"
-if str(_VOICE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_VOICE_ROOT))
-
-try:
-    from src.model.voice_wav2vec_model import VoiceWav2VecModel
-    _VOICE_MODEL_CLASS_AVAILABLE = True
-except ImportError as _e:
-    _VOICE_MODEL_CLASS_AVAILABLE = False
-    print(f"[VoiceAnalyzer] WARNING: could not import VoiceWav2VecModel: {_e}")
-
-VOICE_MODEL_PATH = str(_VOICE_ROOT / "voice_wav2vec_model.pt")
-VOICE_SAMPLE_RATE = 16000
-VOICE_MAX_SECONDS = 15
 
 
 def _model_has_meta_tensors(model: torch.nn.Module) -> bool:
@@ -89,160 +73,7 @@ class VoiceAnalyzer:
         self._device = None
         self._lock = threading.Lock()  # prevents concurrent load attempts
 
-    # ------------------------------------------------------------------
-    # Model loading
-    # ------------------------------------------------------------------
 
-    def load(self):
-        return True
-
-    # keep _load as an alias so nothing else breaks
-    _load = load
-
-    # ------------------------------------------------------------------
-    # Audio helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _extract_audio(input_path: str, output_wav: str) -> str:
-        """Use ffmpeg to extract/convert audio to 16 kHz mono WAV."""
-        cmd = [
-            "ffmpeg", "-y", "-i", input_path,
-            "-ac", "1", "-ar", str(VOICE_SAMPLE_RATE),
-            output_wav
-        ]
-        result = subprocess.run(
-            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"ffmpeg failed for: {input_path}")
-        return output_wav
-
-    @staticmethod
-    def _load_waveform(path: str) -> torch.Tensor:
-        wav, _ = sf.read(path, dtype="float32")
-        if wav.ndim == 2:
-            wav = wav.mean(axis=1)
-        max_len = VOICE_SAMPLE_RATE * VOICE_MAX_SECONDS
-        if len(wav) > max_len:
-            wav = wav[:max_len]
-        else:
-            wav = np.pad(wav, (0, max_len - len(wav)))
-        return torch.tensor(wav)
-
-    # ------------------------------------------------------------------
-    # Analysis
-    # ------------------------------------------------------------------
-
-
-
-    @staticmethod
-    def _extract_features(wav_path: str):
-        wav, _ = sf.read(wav_path, dtype="float32")
-        if wav.ndim == 2:
-            wav = wav.mean(axis=1)
-        energy = np.sqrt(
-            np.convolve(wav ** 2, np.ones(400) / 400, mode="same")
-        ).tolist()
-        zcr = np.abs(np.diff(np.sign(wav))).astype(float).tolist()
-        return energy, zcr
-
-    @staticmethod
-    def _extract_praat_features(wav_path: str) -> dict:
-        try:
-            import parselmouth
-            snd = parselmouth.Sound(wav_path)
-            
-            pitch = snd.to_pitch()
-            pitch_vals = pitch.selected_array['frequency']
-            pitch_vals = pitch_vals[pitch_vals > 0]
-            mean_pitch = float(np.mean(pitch_vals)) if len(pitch_vals) > 0 else 0.0
-            std_pitch = float(np.std(pitch_vals)) if len(pitch_vals) > 0 else 0.0
-            
-            intensity = snd.to_intensity()
-            int_vals = intensity.values[0, :]
-            mean_intensity = float(np.mean(int_vals)) if len(int_vals) > 0 else 0.0
-            
-            try:
-                pointProcess = parselmouth.praat.call(snd, "To PointProcess (periodic, cc)", 75, 500)
-                jitter = parselmouth.praat.call(pointProcess, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
-                shimmer = parselmouth.praat.call([snd, pointProcess], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
-                if np.isnan(jitter): jitter = 0.0
-                if np.isnan(shimmer): shimmer = 0.0
-            except Exception:
-                jitter = 0.0
-                shimmer = 0.0
-                
-            threshold = mean_intensity
-            peaks = 0
-            for i in range(1, len(int_vals)-1):
-                if int_vals[i] > threshold and int_vals[i] > int_vals[i-1] and int_vals[i] > int_vals[i+1]:
-                    peaks += 1
-            
-            duration_mins = snd.duration / 60.0
-            wpm = float((peaks / 1.5) / duration_mins) if duration_mins > 0 else 0.0
-            
-            return {
-                "mean_pitch": round(mean_pitch, 2),
-                "std_pitch": round(std_pitch, 2),
-                "mean_intensity": round(mean_intensity, 2),
-                "jitter": round(jitter, 4),
-                "shimmer": round(shimmer, 4),
-                "wpm": round(wpm, 1)
-            }
-        except ImportError:
-            print("[VoiceAnalyzer] praat-parselmouth not installed.")
-            return {}
-        except Exception as e:
-            print(f"[VoiceAnalyzer] Praat error: {e}")
-            return {}
-
-    # ------------------------------------------------------------------
-    # Public interface
-    # ------------------------------------------------------------------
-
-    def analyze(self, input_path: str, session_id: str = "tmp") -> dict:
-        """Run full voice analysis on a video or audio file.
-
-        Returns a JSON-serialisable dict:
-        {
-            "score": float,
-            "window_times": [...],
-            "window_scores": [...],
-            "energy": [...],
-            "pitch_proxy": [...],
-            "error": str | None
-        }
-        """
-        if not self._load():
-            return {"error": "Voice model not available", "score": None}
-
-        try:
-            ext = os.path.splitext(input_path)[1].lower()
-            wav_path = input_path if ext == ".wav" else self._extract_audio(
-                input_path,
-                str(Path(input_path).parent / f"voice_tmp_{session_id}.wav")
-            )
-
-            praat_features = self._extract_praat_features(wav_path)
-
-            return {
-                "praat_features": praat_features,
-                "error": None
-            }
-        except Exception as e:
-            print(f"[VoiceAnalyzer] ERROR during analysis: {e}")
-            return {"error": str(e), "score": None}
-
-
-# Single shared instance
-voice_analyzer = VoiceAnalyzer()
-
-class VideoInferenceAnalyzer:
-    def load(self): return True
-    def analyze(self, p, s="tmp"): return {"score": None, "error": None}
-
-video_inference_analyzer = VideoInferenceAnalyzer()
 
 # ---------------------------------------------------------------------------
 # GazeAnalyzer — thin wrapper around vision.analyze_video (full model)
@@ -372,8 +203,6 @@ async def lifespan(app_: FastAPI):
 
     print("[Startup] Pre-loading all models…")
     await asyncio.gather(
-        loop.run_in_executor(None, voice_analyzer.load),
-        loop.run_in_executor(None, video_inference_analyzer.load),
         loop.run_in_executor(None, gaze_analyzer.load),
     )
     print("[Startup] All models ready.")
@@ -436,17 +265,14 @@ class VisionSession:
         self.loop = loop
         self.speed = speed
         self.vision_process: Optional[subprocess.Popen] = None
-        self.inference_process: Optional[subprocess.Popen] = None
         self.log_file_path = Path(__file__).parent / "data" / f"gaze_log_{session_id}.txt"
-        self.predictions_file = Path(__file__).parent / "data" / "predictions" / f"{session_id}_predictions.json"
         self.vision_log = Path(__file__).parent / "data" / f"vision_output_{session_id}.log"
-        self.inference_log = Path(__file__).parent / "data" / f"inference_output_{session_id}.log"
         self.start_time = datetime.now()
         self.is_running = False
         self.last_prediction_count = 0
         
     def start(self):
-        """Start vision.py and realtime_inference.py subprocesses for offline batch processing"""
+        """Start vision.py subprocess for offline batch processing"""
         # Ensure data directory exists
         self.log_file_path.parent.mkdir(exist_ok=True)
         self.predictions_file.parent.mkdir(exist_ok=True)
@@ -464,12 +290,10 @@ class VisionSession:
         # Use sys.executable to ensure we use the same Python (from conda env)
         python_exe = sys.executable
         vision_script = Path(__file__).parent / "vision.py"
-        inference_script = Path(__file__).parent / "realtime_inference.py"
 
         print(f"Starting vision system with:")
         print(f"   Python: {python_exe}")
         print(f"   Vision Script: {vision_script}")
-        print(f"   Inference Script: {inference_script}")
         print(f"   Session ID: {self.session_id}")
         print(f"   Mode: offline batch (headless)")
         print(f"   Video file: {self.video_path}")
@@ -487,12 +311,6 @@ class VisionSession:
             vision_cmd.append("--loop")
         if self.speed != 1.0:
             vision_cmd.extend(["--speed", str(self.speed)])
-        
-        # Build command arguments for inference.py
-        inference_cmd = [
-            python_exe, str(inference_script),
-            "--session-id", self.session_id
-        ]
         
         # Start vision.py with output logging
         try:
@@ -536,7 +354,7 @@ class VisionSession:
         print(f"   Log file: {self.log_file_path}")
         
     def stop(self):
-        """Stop vision.py and realtime_inference.py subprocesses gracefully"""
+        """Stop vision.py subprocess gracefully"""
         # Stop vision.py first
         if self.vision_process:
             try:
@@ -557,23 +375,6 @@ class VisionSession:
                     self._vision_log_file = None
             
             print(f"Stopped vision.py")
-        
-        # Stop inference.py (it will detect stop signal and finish)
-        if self.inference_process:
-            try:
-                # Inference process will exit on its own when it detects stop signal
-                # Give it time to finish processing
-                self.inference_process.wait(timeout=10)
-                print(f"Inference process completed naturally")
-            except subprocess.TimeoutExpired:
-                # If still running, terminate it
-                self.inference_process.terminate()
-                try:
-                    self.inference_process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    self.inference_process.kill()
-                    self.inference_process.wait()
-                print(f"Stopped realtime_inference.py")
         
         self.is_running = False
         print(f"Stopped session: {self.session_id}")
@@ -655,89 +456,21 @@ async def _process_chunk(
         gaze_log_path = Path(__file__).parent / "data" / f"gaze_log_{chunk_id}.txt"
 
         try:
-            # ---- Run all ML analyses concurrently ----
+            # ---- Run gaze analysis ----
             gaze_task   = loop.run_in_executor(None, gaze_analyzer.analyze,               video_path, chunk_id)
-            voice_task  = loop.run_in_executor(None, voice_analyzer.analyze,              video_path, chunk_id)
-            video_task  = loop.run_in_executor(None, video_inference_analyzer.analyze,    video_path, chunk_id)
 
-            gaze_data, voice_result, video_result = await asyncio.gather(
-                gaze_task, voice_task, video_task
-            )
-
-            # Compute gaze summary stats from raw log entries
-            gaze_counts = {"Looking Forward": 0, "Looking Left": 0,
-                           "Looking Right": 0, "Looking Away": 0,
-                           "Looking Away (Eyes Only)": 0}
-            for entry in gaze_data:
-                s = entry.get("status", "")
-                if s in gaze_counts:
-                    gaze_counts[s] += 1
-            # Merge eye-only away into Looking Away for backwards-compat summary
-            gaze_counts["Looking Away"] += gaze_counts.pop("Looking Away (Eyes Only)", 0)
-            gaze_total = sum(gaze_counts.values()) or 1  # avoid div-by-zero
-            gaze_summary = {
-                "total_frames": gaze_total,
-                "looking_forward": gaze_counts["Looking Forward"],
-                "looking_left":    gaze_counts["Looking Left"],
-                "looking_right":   gaze_counts["Looking Right"],
-                "looking_away":    gaze_counts["Looking Away"],
-                "looking_forward_pct": round(gaze_counts["Looking Forward"] / gaze_total * 100, 1),
-                "looking_left_pct":    round(gaze_counts["Looking Left"]    / gaze_total * 100, 1),
-                "looking_right_pct":   round(gaze_counts["Looking Right"]   / gaze_total * 100, 1),
-                "looking_away_pct":    round(gaze_counts["Looking Away"]    / gaze_total * 100, 1),
-            } if gaze_data else {}
-
-            # ---- LATE FUSION: Iris (0.85) + VideoMAE (0.15) ----
-            nn_score = video_result.get("score")
-            iris_score = gaze_summary.get("looking_forward_pct", 0.0) / 100.0
-            
-            alpha = 0.85
-            if nn_score is not None:
-                # Combine both scores; iris dominates
-                final_score = (alpha * iris_score) + ((1.0 - alpha) * nn_score)
-            else:
-                # Fallback if NN failed
-                final_score = iris_score
-            
-            final_score = round(final_score, 4)
-
-            # Build a predictions list from the fused result
-            # so the frontend's existing ChunkResult shape stays compatible
-            predictions = []
-            if video_result.get("score") is not None or gaze_data:
-                predictions = [{
-                    "chunk": chunk_index,
-                    "video_file": Path(video_path).name,
-                    "confidence": final_score,
-                    "raw_nn_score": nn_score,
-                    "raw_iris_score": iris_score,
-                    "timestamp": time.time(),
-                    "processing_time": 0,
-                }]
-            inference_summary = {
-                "count": len(predictions),
-                "mean_confidence": final_score,
-                "min_confidence": final_score,
-                "max_confidence": final_score,
-            } if predictions else {}
+            gaze_data = await gaze_task
 
             print(
                 f"[Chunk {chunk_index}] Done: "
-                f"gaze={len(gaze_data)} (F_pct={gaze_summary.get('looking_forward_pct',0)}%), "
-                f"nn_score={nn_score}, "
-                f"fused_confidence={final_score}, "
-                f"voice={voice_result.get('score')}"
+                f"gaze={len(gaze_data)} frames processed"
             )
 
             chunk_payload = {
                 'type': 'chunk_processed',
                 'chunk_id': chunk_id,
                 'chunk_index': chunk_index,
-                'gaze_data': gaze_data if SEND_RAW_GAZE_DATA else [],
-                'gaze_summary': gaze_summary,
-                'predictions': predictions,
-                'inference_summary': inference_summary,
-                'voice_analysis': voice_result,
+                'gaze_data': gaze_data
             }
             chunk_result_cache[chunk_id] = chunk_payload
 
@@ -763,7 +496,6 @@ async def _process_chunk(
             files_to_delete = [
                 video_path,
                 str(gaze_log_path),
-                str(Path(video_path).parent / f"voice_tmp_{chunk_id}.wav"),
             ]
             for fpath in files_to_delete:
                 try:
@@ -879,29 +611,10 @@ async def websocket_endpoint(websocket: WebSocket):
                         if current_session.log_file_path.exists():
                             print(f"   File size: {current_session.log_file_path.stat().st_size} bytes")
                     
-                    # Run voice analysis on the session video (non-blocking via thread)
-                    voice_result = None
-                    if current_session.video_path:
-                        print(f"Running voice analysis on: {current_session.video_path}")
-                        loop_ref = asyncio.get_running_loop()
-                        voice_result = await loop_ref.run_in_executor(
-                            None,
-                            voice_analyzer.analyze,
-                            current_session.video_path,
-                            current_session.session_id
-                        )
-                        if voice_result.get("error"):
-                            print(f"Voice analysis error: {voice_result['error']}")
-                        else:
-                            print(f"Voice score: {voice_result['score']}")
-
                     await websocket.send_json({
                         'type': 'session_ended',
                         'session_id': current_session.session_id,
                         'log_data': log_data,
-                        'predictions': predictions_data.get('predictions', []),
-                        'summary': predictions_data.get('summary', {}),
-                        'voice_analysis': voice_result,
                         'start_time': current_session.start_time.isoformat(),
                         'end_time': datetime.now().isoformat()
                     })
@@ -911,8 +624,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     current_session = None
                     
             elif action == 'process_chunk':
-                # Each 15-s video chunk goes through vision.py, realtime_inference,
-                # and voice_analyzer in parallel. Results come back as 'chunk_processed'.
+                # Each 15-s video chunk goes through vision.py only now.
                 video_path = message.get('video_path')
                 chunk_id = message.get('chunk_id', str(uuid.uuid4()))
                 chunk_index = int(message.get('chunk_index', 0))
@@ -1008,38 +720,6 @@ async def websocket_endpoint(websocket: WebSocket):
             active_sessions.pop(current_session.session_id, None)
         if monitoring_task:
             monitoring_task.cancel()
-
-
-@app.post("/analyze_voice")
-async def analyze_voice(file: UploadFile = File(...)):
-    """Upload an audio or video file and receive a voice analysis report.
-
-    Returns:
-        score         - overall speaking skills score (0–1)
-        window_times  - time axis for sliding window (seconds)
-        window_scores - per-window scores
-        energy        - loudness proxy array
-        pitch_proxy   - zero-crossing-rate array (pitch proxy)
-    """
-    upload_dir = Path(__file__).parent / "data" / "uploads"
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
-    file_id = f"{uuid.uuid4()}_{file.filename}"
-    file_path = upload_dir / file_id
-
-    with open(file_path, "wb") as f:
-        while chunk := await file.read(1024 * 1024):
-            f.write(chunk)
-
-    print(f"[analyze_voice] Received: {file_path}")
-
-    # Run analysis in thread pool so we don't block the event loop
-    loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None, voice_analyzer.analyze, str(file_path), file_id
-    )
-
-    return {"status": "ok", **result}
 
 
 @app.post("/upload_video")

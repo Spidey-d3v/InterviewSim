@@ -59,13 +59,6 @@ export const buildGazeDistribution = (gazeData: GazeLogEntry[]): GazeDistributio
  * Extracts focus counts from a processed chunk result
  */
 export const getChunkGazeCounts = (chunk: ChunkResult): { focused: number; total: number } => {
-  const summary = chunk.gaze_summary;
-  if (summary && summary.total_frames > 0) {
-    return {
-      focused: summary.looking_forward,
-      total: summary.total_frames,
-    };
-  }
 
   const total = chunk.gaze_data.length;
   const focused = chunk.gaze_data.filter((e) => {
@@ -79,16 +72,6 @@ export const getChunkGazeCounts = (chunk: ChunkResult): { focused: number; total
  * Builds distribution for a specific chunk
  */
 export const buildChunkGazeDistribution = (chunk: ChunkResult): GazeDistribution => {
-  const summary = chunk.gaze_summary;
-  if (summary && summary.total_frames > 0) {
-    return {
-      forward: summary.looking_forward / summary.total_frames,
-      left: summary.looking_left / summary.total_frames,
-      right: summary.looking_right / summary.total_frames,
-      down: 0,
-      away: summary.looking_away / summary.total_frames,
-    };
-  }
 
   return buildGazeDistribution(chunk.gaze_data);
 };

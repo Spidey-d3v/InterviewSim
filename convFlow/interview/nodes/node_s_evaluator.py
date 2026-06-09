@@ -1,16 +1,5 @@
 async def node_s_evaluator(llm, phase: str, transcript: str):
 
-    phase_metrics = {
-        "intro": ["communication", "clarity", "confidence"],
-        "resume": ["relevance", "depth", "impact"],
-        "core_tech": ["technical_depth", "correctness", "problem_solving"],
-        "situational": ["reasoning", "decision_making", "communication"],
-        "closing": ["professionalism", "curiosity", "engagement"],
-    }
-
-    metrics = phase_metrics.get(phase.lower(), [])
-    metrics_str = "\n- ".join(metrics)
-
     prompt = f"""
 You are evaluating a candidate interview.
 
@@ -21,18 +10,12 @@ Transcript:
 
 Evaluate on:
 
-1. ONE universal metric:
-- overall_performance (0-10)
-
-2. THREE phase-specific metrics for this phase:
-- {metrics_str}
-
-3. Identify context-aware FILLER WORDS:
+1. Identify context-aware FILLER WORDS:
 - Pick out words that the candidate uses excessively or as placeholders (e.g., "um", "uh", "like", "you know", "actually").
 - Also include redundant usage of "and" or "but" if used to stall for time.
 - Return a dictionary of word: count.
 
-4. Provide PROFESSIONAL INTERVIEW ADVICE:
+2. Provide PROFESSIONAL INTERVIEW ADVICE:
 - Give 3–5 concise, actionable suggestions
 - Focus on how the candidate can improve their responses
 - Be specific (not generic)
@@ -40,10 +23,6 @@ Evaluate on:
 
 Return STRICT JSON:
 {{
-    "overall": int,
-    "metrics": {{
-        {', '.join([f'"{m}": int' for m in metrics])}
-    }},
     "filler_words": {{
         "word": int
     }},
@@ -65,9 +44,6 @@ Return STRICT JSON:
         if match:
             parsed = json.loads(match.group(0))
 
-            # Ensure only relevant metrics are returned
-            filtered_metrics = {k: parsed.get("metrics", {}).get(k, 0) for k in metrics}
-
             # Ensure advice is always a list of strings
             advice = parsed.get("advice", [])
             if not isinstance(advice, list):
@@ -75,8 +51,6 @@ Return STRICT JSON:
             advice = [str(a) for a in advice][:5]  # cap to avoid verbosity
 
             return {
-                "overall": parsed.get("overall", 0),
-                "metrics": filtered_metrics,
                 "filler_words": parsed.get("filler_words", {}),
                 "advice": advice
             }
@@ -84,8 +58,6 @@ Return STRICT JSON:
         pass
 
     return {
-        "overall": 0,
-        "metrics": {k: 0 for k in metrics},
         "filler_words": {},
         "advice": []
     }

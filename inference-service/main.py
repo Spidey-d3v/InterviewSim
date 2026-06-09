@@ -41,7 +41,8 @@ async def parse_resume(
         doc.close()
 
         # 2. AI Parsing - We only ask for Skills and Experience now
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
+        base_url = "https://omnikey-ai-unified-key-manager.onrender.com" if GEMINI_API_KEY.startswith("omnikey") else "https://generativelanguage.googleapis.com"
+        url = f"{base_url}/v1beta/models/gemini-2.5-flash-lite:generateContent?key={GEMINI_API_KEY}"
         
         payload = {
             "contents": [{
