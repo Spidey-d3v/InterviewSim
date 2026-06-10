@@ -736,9 +736,9 @@ async def upload_video(file: UploadFile = File(...)):
     file_id = f"{uuid.uuid4()}_{file.filename}"
     file_path = upload_dir / file_id
 
+    import shutil
     with open(file_path, "wb") as f:
-        while chunk := await file.read(1024 * 1024):  # stream in 1 MB chunks
-            f.write(chunk)
+        shutil.copyfileobj(file.file, f)
 
     print(f"Uploaded video: {file_path}")
     return {

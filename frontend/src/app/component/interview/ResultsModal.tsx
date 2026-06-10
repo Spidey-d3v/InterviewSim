@@ -293,13 +293,45 @@ export default function ResultsModal({
       pdf.text(`PACE: ${obs.pace?.wpm || 0} WPM (${obs.pace?.status || 'balanced'})`, margin + 15, y + 20);
       pdf.text(`PAUSES: ${obs.pauses?.long_pause_count || 0} long (ratio: ${obs.pauses?.pause_ratio || 0})`, margin + 15, y + 35);
       
-      const pitch = obs.modulation?.pitch_variation || 'balanced';
-      const vol = obs.modulation?.volume_variation || 'balanced';
-      pdf.text(`MODULATION: Pitch: ${pitch} | Volume: ${vol}`, margin + 15, y + 50);
+      const responseLength = obs.response_length?.status || 'balanced';
+      pdf.text(`RESPONSE LENGTH: ${responseLength.toUpperCase()}`, margin + 15, y + 50);
+
+      const vocab = obs.vocabulary;
+      if (vocab) {
+         pdf.text(`VOCABULARY: ${vocab.strong_words_used} Strong | ${vocab.weak_words_used} Weak (${vocab.status})`, margin + 150, y + 35);
+      }
 
       if (obs.fillers && Object.keys(obs.fillers).length > 0) {
          const fTxt = Object.entries(obs.fillers).map(([k,v]) => `${k.toUpperCase()}: ${v}`).join(' | ');
          pdf.text(`FILLERS: ${fTxt}`, margin + 250, y + 20);
+      }
+      y += 90;
+
+      if (v2Feedback.technical_evaluation && v2Feedback.technical_evaluation.length > 0) {
+        ensureSpace(40);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+        pdf.text('TECHNICAL EVALUATION', margin, y);
+        y += 20;
+
+        v2Feedback.technical_evaluation.forEach((tech: any) => {
+          ensureSpace(40);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(9);
+          pdf.setTextColor(COLORS.INDIGO[0], COLORS.INDIGO[1], COLORS.INDIGO[2]);
+          pdf.text(`Q${tech.question_index + 1} - Score: ${tech.accuracy_score_out_of_5}/5`, margin, y);
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setTextColor(COLORS.TEXT_DARK[0], COLORS.TEXT_DARK[1], COLORS.TEXT_DARK[2]);
+          const techLines = pdf.splitTextToSize(tech.feedback, contentWidth - 60);
+          techLines.forEach((al: string) => {
+            pdf.text(al, margin + 50, y);
+            y += 12;
+          });
+          y += 5;
+        });
+        y += 20;
       }
       y += 90;
 

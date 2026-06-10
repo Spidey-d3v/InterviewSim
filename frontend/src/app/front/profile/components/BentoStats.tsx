@@ -20,11 +20,9 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
   const totalSessions = sessions.length;
   const avgWpm = sessions.length > 0 
     ? (sessions.reduce((acc, s) => {
-        const chunks = (s.question_metrics_json || []).flatMap((q: any) => q.chunks || []);
-        const scores = chunks.map((c: any) => c.praat_features?.wpm).filter((v: any) => typeof v === 'number');
-        const sessionAvg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
-        return acc + sessionAvg;
-      }, 0) / sessions.length) 
+        const v2wpm = s.recommendation_v2?.observations?.pace?.wpm || 0;
+        return acc + v2wpm;
+      }, 0) / (sessions.filter(s => s.recommendation_v2?.observations?.pace?.wpm).length || 1)) 
     : 0;
   
   const totalQuestions = sessions.reduce((acc, s) => acc + (s.total_questions || 0), 0);
@@ -32,15 +30,11 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
   // Aggregate filler words across all sessions
   const globalFillers: Record<string, number> = {};
   sessions.forEach(s => {
-    const evalData = s.llm_evaluation_json;
-    if (evalData) {
-      Object.values(evalData).forEach((phase: any) => {
-        if (phase.filler_words) {
-          Object.entries(phase.filler_words).forEach(([word, count]) => {
-            const w = word.toLowerCase();
-            globalFillers[w] = (globalFillers[w] || 0) + (count as number);
-          });
-        }
+    const v2Feedback = s.recommendation_v2;
+    if (v2Feedback?.version === 2 && v2Feedback.observations?.fillers) {
+      Object.entries(v2Feedback.observations.fillers).forEach(([word, count]) => {
+        const w = word.toLowerCase();
+        globalFillers[w] = (globalFillers[w] || 0) + (count as number);
       });
     }
   });
@@ -51,9 +45,7 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
 
   // Data for Sparklines (last 10 sessions)
   const wpmTrend = sessions.slice(0, 10).reverse().map(s => {
-    const chunks = (s.question_metrics_json || []).flatMap((q: any) => q.chunks || []);
-    const scores = chunks.map((c: any) => c.praat_features?.wpm).filter((v: any) => typeof v === 'number');
-    const sessionAvg = scores.length > 0 ? scores.reduce((a: number, b: number) => a + b, 0) / scores.length : 0;
+    const sessionAvg = s.recommendation_v2?.observations?.pace?.wpm || 0;
     return { value: sessionAvg };
   });
 

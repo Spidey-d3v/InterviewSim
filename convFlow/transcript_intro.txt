@@ -1,0 +1,6 @@
+
+Interviewer: Hi Gaurav, thanks for coming in today. We're excited to talk to you about the AI Engineer role here at Apple. I see you've got some really interesting projects on your resume, particularly the Personalized Driver–Vehicle Digital Twin. To start, could you tell me a bit about yourself and what led you to pursue a career in AI engineering?
+Candidate: Yeah sure. So I am gaurav kosh and I am doing undergrad B.Tech at PMI Punjab university and I have worked in a lot of projects which are which require AI engineering as skill because I worked in a lot of industries where they use AI daily, they ship AI systems daily. AI systems daily and they do a lot of work with the system integrated around AI. Yeah.
+
+Interviewer: That's great to hear, Gaurav. It sounds like you've already gained some practical experience. Could you elaborate a bit on your background and what specifically about AI engineering at Apple excites you and makes you feel like a good fit for this role?
+Candidate: Can you can we skip this phase please?

@@ -70,6 +70,10 @@ export default function LandingPage() {
       router.push('/auth/login');
       return;
     }
+    if (hasResume === null) {
+      // Profile data is still loading, ignore click to prevent false prompt
+      return;
+    }
     if (hasResume) {
       setIsRoleModalOpen(true);
     } else {
@@ -192,9 +196,10 @@ export default function LandingPage() {
           )}
           <button
             onClick={handleStartInterview}
-            className="px-5 py-2 bg-white text-black text-sm font-bold rounded-full hover:bg-gray-200 transition-all shadow-lg"
+            disabled={hasResume === null}
+            className={`px-5 py-2 ${hasResume === null ? 'bg-gray-400 cursor-not-allowed opacity-50' : 'bg-white hover:bg-gray-200'} text-black text-sm font-bold rounded-full transition-all shadow-lg`}
           >
-            Start Session
+            {hasResume === null ? 'Loading...' : 'Start Session'}
           </button>
         </div>
       </nav>
@@ -225,9 +230,10 @@ export default function LandingPage() {
               <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl blur opacity-30 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
               <button
                 onClick={handleStartInterview}
-                className="relative w-full px-8 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-black text-xl rounded-2xl transition-all hover:scale-[1.02] flex items-center justify-center gap-4 shadow-2xl"
+                disabled={hasResume === null}
+                className={`relative w-full px-8 py-5 bg-gradient-to-r ${hasResume === null ? 'from-gray-600 to-gray-500 cursor-not-allowed opacity-50' : 'from-purple-600 to-pink-600 hover:scale-[1.02]'} text-white font-black text-xl rounded-2xl transition-all flex items-center justify-center gap-4 shadow-2xl`}
               >
-                Start Session
+                {hasResume === null ? 'Loading...' : 'Start Session'}
               </button>
             </div>
 

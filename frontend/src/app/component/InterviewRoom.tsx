@@ -10,6 +10,7 @@ import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
 import { useConvFlowRoom } from '../hooks/useConvFlowRoom';
 
 // Modular Components
+import PreFlightCheck from './interview/PreFlightCheck';
 import CalibrationFlow from './CalibrationFlow';
 import ResultsModal from './interview/ResultsModal';
 import AnalyticsPanel from './interview/AnalyticsPanel';
@@ -50,6 +51,7 @@ export default function InterviewRoom() {
 
   // -- Component State --
   const [recordingTime, setRecordingTime] = useState(0);
+  const [showPreFlight, setShowPreFlight] = useState(true);
   const [showCalibration, setShowCalibration] = useState(true);
   const [interviewStarted, setInterviewStarted] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -369,7 +371,11 @@ export default function InterviewRoom() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-[#0a0a0f] text-white flex flex-col overflow-hidden">
-      {showCalibration && (
+      {showPreFlight && (
+        <PreFlightCheck onComplete={() => setShowPreFlight(false)} />
+      )}
+
+      {!showPreFlight && showCalibration && (
         <CalibrationFlow
           onComplete={() => {
             setShowCalibration(false);

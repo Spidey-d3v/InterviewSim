@@ -35,8 +35,20 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
   const rawMetrics = session.question_metrics_json;
   const isV2 = rawMetrics && !Array.isArray(rawMetrics) && rawMetrics.version === 2;
   const questions = isV2 ? rawMetrics.questions : (Array.isArray(rawMetrics) ? rawMetrics : []);
-  const phaseEvaluations = session.llm_evaluation_json || (isV2 ? rawMetrics.phase_evaluations : null);
+  const phaseEvaluations = null;
   const v2Feedback = session.recommendation_v2;
+
+  let gazeData = session.overall_gaze_distribution || {};
+  const totalGaze: number = Object.values(gazeData).reduce((a: number, b: unknown) => a + Number(b), 0) as number;
+  if (totalGaze > 1.01) {
+    gazeData = {
+      forward: (gazeData.forward || 0) / totalGaze,
+      away: (gazeData.away || 0) / totalGaze,
+      left: (gazeData.left || 0) / totalGaze,
+      right: (gazeData.right || 0) / totalGaze,
+      down: (gazeData.down || 0) / totalGaze,
+    };
+  }
 
   const date = new Date(session.created_at).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -51,14 +63,6 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
   if (v2Feedback?.version === 2 && v2Feedback.observations?.fillers) {
     Object.entries(v2Feedback.observations.fillers).forEach(([word, count]) => {
       aggregatedFillers[word.toLowerCase()] = (aggregatedFillers[word.toLowerCase()] || 0) + Number(count);
-    });
-  } else if (phaseEvaluations) {
-    Object.values(phaseEvaluations).forEach((data: any) => {
-      if (data.filler_words) {
-        Object.entries(data.filler_words).forEach(([word, count]) => {
-          aggregatedFillers[word.toLowerCase()] = (aggregatedFillers[word.toLowerCase()] || 0) + (count as number);
-        });
-      }
     });
   }
 
@@ -113,53 +117,6 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12">
 
-          {/* Phase-Wise Breakdown (Legacy) */}
-          {!v2Feedback && phaseEvaluations && (
-            <section>
-              <div className="flex items-center gap-2 mb-6">
-                <Target size={18} className="text-purple-500" />
-                <h3 className="text-lg font-bold tracking-tight uppercase">Strategic Phase Analysis</h3>
-              </div>
-              <div className="space-y-4">
-                {Object.entries(phaseEvaluations).map(([phase, data]: [string, any]) => (
-                  <div key={phase} className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors">
-                    <div className="flex justify-between items-center mb-4">
-                      <p className="text-xs font-black uppercase tracking-widest text-gray-400">{phase.replace(/_/g, ' ')}</p>
-                      <span className="px-3 py-1 bg-purple-500/20 rounded-full text-[10px] font-bold text-purple-400 border border-purple-500/30">
-                        {data.overall}/10 SCORE
-                      </span>
-                    </div>
-                    
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {Object.entries(data.metrics || {}).map(([k, v]: [string, any]) => (
-                        <div key={k} className="px-3 py-1.5 bg-white/5 rounded-xl border border-white/5 flex items-center gap-2">
-                          <span className="text-[9px] uppercase font-bold text-gray-500">{k.replace(/_/g, ' ')}</span>
-                          <span className="text-[10px] font-black text-gray-300">{v}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    {data.advice && data.advice.length > 0 && (
-                      <div className="mt-4 p-4 bg-yellow-500/5 rounded-2xl border border-yellow-500/10">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Lightbulb size={14} className="text-yellow-500" />
-                          <p className="text-[10px] font-bold uppercase text-yellow-500">Coach's Intel</p>
-                        </div>
-                        <ul className="space-y-1.5">
-                          {data.advice.map((a: string, i: number) => (
-                            <li key={i} className="text-xs text-gray-400 leading-relaxed flex gap-2">
-                              <span className="text-yellow-500/50">•</span> {a}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
           {/* V2 Feedback (Observations & Actions) */}
           {v2Feedback?.version === 2 && (
             <section>
@@ -167,6 +124,7 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                 <Target size={18} className="text-purple-500" />
                 <h3 className="text-lg font-bold tracking-tight uppercase">Performance Observations</h3>
               </div>
+              
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Pace</p>
@@ -174,26 +132,83 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                    <p className="text-xs text-purple-400 capitalize font-bold mt-1">{v2Feedback.observations.pace?.status || "Balanced"}</p>
                 </div>
                 <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Pauses</p>
-                   <p className="text-2xl font-black text-gray-200">{v2Feedback.observations.pauses?.long_pause_count || 0}</p>
-                   <p className="text-xs text-purple-400 font-bold mt-1">Ratio: {v2Feedback.observations.pauses?.pause_ratio || 0}</p>
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Focus</p>
+                   <p className="text-2xl font-black text-gray-200">{Math.round((v2Feedback.observations.camera_engagement?.average || 0) * 100)}%</p>
+                   <p className="text-xs text-emerald-400 font-bold mt-1">Direct Eye Contact</p>
                 </div>
-                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl col-span-2">
-                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Modulation</p>
-                   <div className="flex justify-between mt-2">
-                     <div>
-                       <span className="text-xs text-gray-400">Pitch Variation: </span>
-                       <span className="text-xs font-bold text-gray-200 capitalize">{v2Feedback.observations.modulation?.pitch_variation || 'Balanced'}</span>
-                     </div>
-                     <div>
-                       <span className="text-xs text-gray-400">Volume Variation: </span>
-                       <span className="text-xs font-bold text-gray-200 capitalize">{v2Feedback.observations.modulation?.volume_variation || 'Balanced'}</span>
-                     </div>
-                   </div>
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Length</p>
+                   <p className="text-xl font-black text-gray-200 capitalize">{v2Feedback.observations.response_length?.status || 'Balanced'}</p>
+                </div>
+                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                   <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Vocabulary</p>
+                   <p className="text-xl font-black text-gray-200 capitalize">{v2Feedback.observations.vocabulary?.status || 'Confident'}</p>
+                   <p className="text-xs text-gray-500 mt-1">{v2Feedback.observations.vocabulary?.strong_words_used || 0} Strong | {v2Feedback.observations.vocabulary?.weak_words_used || 0} Weak</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mb-6 mt-8">
+              {v2Feedback.observations.star_coverage && (
+                <div className="mt-8 p-6 bg-white/[0.02] border border-white/5 rounded-3xl">
+                   <div className="flex items-center justify-between mb-6">
+                     <div>
+                       <h4 className="text-sm font-bold text-gray-200 tracking-tight uppercase">STAR Method Adherence</h4>
+                       <p className="text-xs text-gray-500 mt-1">Breakdown of how you structured your answers</p>
+                     </div>
+                   </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                     <div className="relative h-64 w-full flex items-center justify-center">
+                       {(() => {
+                         const s = v2Feedback.observations.star_coverage.situation || 0;
+                         const t = v2Feedback.observations.star_coverage.task || 0;
+                         const a = v2Feedback.observations.star_coverage.action || 0;
+                         const r = v2Feedback.observations.star_coverage.result || 0;
+                         const total = s + t + a + r || 1; // Prevent division by zero
+                         const sp = (s / total) * 100;
+                         const tp = (t / total) * 100;
+                         const ap = (a / total) * 100;
+                         const rp = (r / total) * 100;
+                         
+                         const gradient = `conic-gradient(
+                           #818cf8 0% ${sp}%,
+                           #c084fc ${sp}% ${sp + tp}%,
+                           #34d399 ${sp + tp}% ${sp + tp + ap}%,
+                           #f472b6 ${sp + tp + ap}% 100%
+                         )`;
+
+                         return (
+                           <div className="relative w-48 h-48 rounded-full shadow-2xl" style={{ background: gradient }}>
+                             <div className="absolute inset-2 rounded-full bg-[#111827] flex items-center justify-center">
+                               <div className="text-center">
+                                 <span className="block text-2xl font-black text-white">{Math.round(total)}%</span>
+                                 <span className="text-[10px] text-gray-500 font-bold">COVERAGE</span>
+                               </div>
+                             </div>
+                           </div>
+                         );
+                       })()}
+                     </div>
+                     <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="text-indigo-400 font-bold block mb-1">Situation (Target: ~10%)</span>
+                          <span className="text-gray-500">Setting the scene. You achieved: <strong className="text-gray-300">{v2Feedback.observations.star_coverage.situation || 0}%</strong></span>
+                        </div>
+                        <div>
+                          <span className="text-purple-400 font-bold block mb-1">Task (Target: ~10%)</span>
+                          <span className="text-gray-500">Describing your responsibility. You achieved: <strong className="text-gray-300">{v2Feedback.observations.star_coverage.task || 0}%</strong></span>
+                        </div>
+                        <div>
+                          <span className="text-emerald-400 font-bold block mb-1">Action (Target: ~60%)</span>
+                          <span className="text-gray-500">What YOU actually did. You achieved: <strong className="text-gray-300">{v2Feedback.observations.star_coverage.action || 0}%</strong></span>
+                        </div>
+                        <div>
+                          <span className="text-pink-400 font-bold block mb-1">Result (Target: ~20%)</span>
+                          <span className="text-gray-500">The positive outcome. You achieved: <strong className="text-gray-300">{v2Feedback.observations.star_coverage.result || 0}%</strong></span>
+                        </div>
+                     </div>
+                   </div>
+                </div>
+              )}
+<div className="flex items-center gap-2 mb-6 mt-8">
                 <Lightbulb size={18} className="text-yellow-500" />
                 <h3 className="text-lg font-bold tracking-tight uppercase">Strategic Action Plan</h3>
               </div>
@@ -232,19 +247,19 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-white/[0.02] border border-white/5 rounded-3xl p-8">
               <div className="h-56 w-full">
-                <FocusRadar gazeDistribution={session.overall_gaze_distribution || {}} />
+                <FocusRadar gazeDistribution={gazeData} />
               </div>
               <div className="space-y-4">
                 <p className="text-sm text-gray-400 leading-relaxed">
                   Your spatial awareness indicates high engagement. You maintained 
-                  <span className="text-white font-bold"> {Math.round((session.overall_gaze_distribution?.forward || 0) * 100)}% </span> 
+                  <span className="text-white font-bold"> {Math.round((gazeData?.forward || 0) * 100)}% </span> 
                   direct eye contact.
                 </p>
                 <div className="space-y-2">
                    {['Forward', 'Away'].map(key => (
                      <div key={key} className="flex justify-between items-center text-[10px] font-bold uppercase tracking-tighter">
                         <span className="text-gray-500">{key} Focus</span>
-                        <span className="text-gray-300">{Math.round((session.overall_gaze_distribution?.[key.toLowerCase()] || 0) * 100)}%</span>
+                        <span className="text-gray-300">{Math.round((gazeData?.[key.toLowerCase()] || 0) * 100)}%</span>
                      </div>
                    ))}
                 </div>
@@ -313,13 +328,77 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
 
         {/* Footer Actions */}
         <div className="p-8 border-t border-white/5 bg-white/[0.01]">
+            
             <button 
-              disabled
-              className="w-full py-4 bg-white/5 rounded-2xl font-black text-lg text-gray-500 cursor-not-allowed flex items-center justify-center gap-3 border border-white/5"
+              onClick={async () => {
+                const { jsPDF } = await import('jspdf');
+                const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                const margin = 40;
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const contentWidth = pageWidth - margin * 2;
+                let y = margin;
+
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(22);
+                pdf.setTextColor(255, 255, 255);
+                pdf.setFillColor(17, 24, 39);
+                pdf.rect(0, 0, pageWidth, 100, 'F');
+                pdf.text('INTERVIEW AI DOSSIER', margin, margin + 25);
+                y = 120;
+
+                if (v2Feedback && v2Feedback.version === 2) {
+                  const obs = v2Feedback.observations;
+                  pdf.setFont('helvetica', 'bold');
+                  pdf.setFontSize(14);
+                  pdf.setTextColor(17, 24, 39);
+                  pdf.text('OVERALL OBSERVATIONS', margin, y);
+                  y += 20;
+
+                  pdf.setFillColor(243, 244, 246);
+                  pdf.rect(margin, y, contentWidth, 70, 'F');
+                  pdf.setFontSize(10);
+                  
+                  if (obs.pace) {
+                    pdf.text(`PACE: ${obs.pace.wpm} WPM (${obs.pace.status})`, margin + 15, y + 20);
+                  }
+                  if (obs.camera_engagement) {
+                    pdf.text(`FOCUS: ${Math.round(obs.camera_engagement.average * 100)}%`, margin + 150, y + 20);
+                  }
+                  if (obs.vocabulary) {
+                    pdf.text(`VOCAB: ${obs.vocabulary.strong_words_used} Strong | ${obs.vocabulary.weak_words_used} Weak`, margin + 15, y + 40);
+                  }
+                  if (obs.response_length) {
+                    pdf.text(`LENGTH: ${obs.response_length.status}`, margin + 150, y + 40);
+                  }
+                  y += 100;
+
+                  if (v2Feedback.technical_evaluation && v2Feedback.technical_evaluation.length > 0) {
+                    pdf.setFontSize(14);
+                    pdf.text('TECHNICAL EVALUATION', margin, y);
+                    y += 20;
+                    v2Feedback.technical_evaluation.forEach((tech: any) => {
+                      if (y > pdf.internal.pageSize.getHeight() - 50) { pdf.addPage(); y = margin; }
+                      pdf.setFontSize(9);
+                      pdf.setFont('helvetica', 'bold');
+                      pdf.setTextColor(99, 102, 241);
+                      pdf.text(`Q${tech.question_index + 1} - Score: ${tech.accuracy_score_out_of_5}/5`, margin, y);
+                      pdf.setFont('helvetica', 'normal');
+                      pdf.setTextColor(17, 24, 39);
+                      const techLines = pdf.splitTextToSize(tech.feedback, contentWidth - 40);
+                      techLines.forEach((al: string) => { pdf.text(al, margin + 20, y += 12); });
+                      y += 20;
+                    });
+                  }
+                }
+
+                pdf.save(`interview-dossier-${session.session_id.slice(0, 8)}.pdf`);
+              }}
+              className="w-full py-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-2xl font-black text-lg text-white transition-all flex items-center justify-center gap-3 shadow-2xl"
             >
               <Download size={20} />
-              PDF DOSSIER ONLY AVAILABLE POST-INTERVIEW
+              DOWNLOAD PDF DOSSIER
             </button>
+
         </div>
       </motion.div>
     </>

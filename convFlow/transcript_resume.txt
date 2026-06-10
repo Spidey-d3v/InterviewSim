@@ -1,0 +1,3 @@
+
+Interviewer: "Hi Gaurav, I'm Michael. Kate has handed over the reins for this part of the interview. I see from your resume that you have some interesting projects listed. Could you tell me about your experience with PyTorch or TensorFlow?"
+Candidate: Can we skip this phase please?

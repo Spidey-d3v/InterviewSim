@@ -110,14 +110,30 @@ def _compute_overall_gaze(chunks: list[ChunkMetricModel]) -> dict[str, dict[str,
                 "away": 0.0,
             }
         }
+    
+    total_frames = 0
+    sums = {"forward": 0, "left": 0, "right": 0, "down": 0, "away": 0}
+    for c in chunks:
+        g = c.gaze_distribution
+        sums["forward"] += g.forward
+        sums["left"] += g.left
+        sums["right"] += g.right
+        sums["down"] += g.down
+        sums["away"] += g.away
+        total_frames += (g.forward + g.left + g.right + g.down + g.away)
+    
+    if total_frames == 0:
+        return {
+            "overall_gaze_distribution": { "forward": 0.0, "left": 0.0, "right": 0.0, "down": 0.0, "away": 0.0 }
+        }
 
     return {
         "overall_gaze_distribution": {
-            "forward": float(sum(c.gaze_distribution.forward for c in chunks) / len(chunks)),
-            "left": float(sum(c.gaze_distribution.left for c in chunks) / len(chunks)),
-            "right": float(sum(c.gaze_distribution.right for c in chunks) / len(chunks)),
-            "down": float(sum(c.gaze_distribution.down for c in chunks) / len(chunks)),
-            "away": float(sum(c.gaze_distribution.away for c in chunks) / len(chunks)),
+            "forward": float(sums["forward"] / total_frames),
+            "left": float(sums["left"] / total_frames),
+            "right": float(sums["right"] / total_frames),
+            "down": float(sums["down"] / total_frames),
+            "away": float(sums["away"] / total_frames),
         }
     }
 
@@ -644,9 +660,31 @@ async def parse_resume(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+from fastapi import BackgroundTasks
+from database import SessionLocal
+
+def background_generate_v2_feedback(session_id: str, metrics_dump: list, total_questions: int, total_chunks: int):
+    try:
+        from llm.feedback_generator import generate_v2_feedback
+        print(f"⏳ Generating AI Feedback Dossier for session {session_id} (this may take 15-30 seconds)...")
+        v2_feedback = generate_v2_feedback(metrics_dump, total_questions, total_chunks)
+        print("✅ AI Feedback generated successfully!")
+        
+        db = SessionLocal()
+        try:
+            session = db.query(InterviewSession).filter(InterviewSession.session_id == session_id).first()
+            if session:
+                session.recommendation_v2 = v2_feedback
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"Failed to generate v2 feedback in background: {e}")
+
 @app.post("/api/interview-sessions/finalize")
 async def finalize_interview_session(
     payload: FinalizeInterviewSessionPayload,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     try:
@@ -690,13 +728,16 @@ async def finalize_interview_session(
         row["overall_gaze_distribution"] = gaze_dist
         row["average_focus"] = (total_focus / total_gaze_frames) if total_gaze_frames > 0 else 0.0
 
-        try:
-            from llm.feedback_generator import generate_v2_feedback
-            metrics_dump = [q.model_dump(exclude_none=True) for q in payload.question_metrics_json]
-            v2_feedback = generate_v2_feedback(metrics_dump, len(payload.question_metrics_json), len(all_chunks))
-            row["recommendation_v2"] = v2_feedback
-        except Exception as e:
-            print(f"Failed to generate v2 feedback: {e}")
+        # We no longer block on generating V2 feedback here. 
+        # Instead, we pass it to the background task.
+        metrics_dump = [q.model_dump(exclude_none=True) for q in payload.question_metrics_json]
+        background_tasks.add_task(
+            background_generate_v2_feedback, 
+            payload.session_id, 
+            metrics_dump, 
+            len(payload.question_metrics_json), 
+            len(all_chunks)
+        )
 
         if payload.llm_evaluation_json:
             row["llm_evaluation_json"] = payload.llm_evaluation_json

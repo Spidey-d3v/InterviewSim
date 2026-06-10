@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { AlertCircle } from 'lucide-react';
 import Sidebar from '../profile/components/Sidebar';
 import BentoStats from '../profile/components/BentoStats';
 import SessionTimeline from '../profile/components/SessionTimeline';
@@ -16,10 +18,34 @@ interface DashboardClientProps {
 }
 
 export default function DashboardClient({ sessions, profile, userId }: DashboardClientProps) {
+  const router = useRouter();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   // Extract selected session data
   const selectedSession = sessions.find(s => s.session_id === selectedSessionId);
+
+  // Check if there is a session created within the last 5 minutes
+  const hasRecentSession = sessions.some(session => {
+    if (!session.created_at) return false;
+    const sessionTime = new Date(session.created_at).getTime();
+    const now = Date.now();
+    return (now - sessionTime) < 5 * 60 * 1000; // 5 minutes
+  });
+
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout;
+
+    if (hasRecentSession) {
+      // Poll every 15 seconds to fetch latest data if processing
+      intervalId = setInterval(() => {
+        router.refresh();
+      }, 15000);
+    }
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [hasRecentSession, router]);
 
   return (
     <div className="flex h-screen bg-[#0a0a0f] text-white overflow-hidden">
@@ -36,7 +62,7 @@ export default function DashboardClient({ sessions, profile, userId }: Dashboard
 
         <div className="relative z-10 p-8 lg:p-12 max-w-7xl mx-auto">
           {/* Header Section */}
-          <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -50,6 +76,30 @@ export default function DashboardClient({ sessions, profile, userId }: Dashboard
               </p>
             </motion.div>
           </header>
+
+          {/* Processing Warning Banner */}
+          <AnimatePresence>
+            {hasRecentSession && (
+              <motion.div 
+                initial={{ opacity: 0, y: -20, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -20, height: 0 }}
+                className="mb-8 overflow-hidden"
+              >
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-4 flex items-start gap-4 backdrop-blur-xl">
+                  <div className="mt-0.5">
+                    <AlertCircle className="text-yellow-500" size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-yellow-500 font-bold text-sm">Data Processing in Progress</h4>
+                    <p className="text-yellow-500/80 text-xs mt-1 leading-relaxed">
+                      We detected a recently completed session. Our AI models are currently analyzing the video, audio, and behavioral metrics. Some data may appear incomplete. Please check back in a few minutes for the complete analysis.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Hero Bento Grid */}
           <BentoStats sessions={sessions} />
