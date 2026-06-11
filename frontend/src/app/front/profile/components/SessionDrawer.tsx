@@ -61,24 +61,55 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
   });
 
 
-  // Aggregate filler words
+  // Aggregate filler words based on SMART transcript occurrences
   const aggregatedFillers: Record<string, number> = {};
-  if (v2Feedback?.version === 2 && v2Feedback.observations?.fillers) {
-    Object.entries(v2Feedback.observations.fillers).forEach(([word, count]) => {
-      aggregatedFillers[word.toLowerCase()] = (aggregatedFillers[word.toLowerCase()] || 0) + Number(count);
+  
+  // Advanced regex rules to avoid catching valid usages (e.g., "I like", "do you know")
+  const fillerRules: Record<string, RegExp> = {
+    'um': /\bum\b/gi,
+    'uh': /\buh\b/gi,
+    'ah': /\bah\b/gi,
+    'basically': /\bbasically\b/gi,
+    'literally': /\bliterally\b/gi,
+    'you know': /(?<!\b(?:do|let|make|as)\s+)\byou know\b/gi,
+    'i mean': /\bi mean\b/gi,
+    'sort of': /\bsort of\b/gi,
+    'kind of': /\bkind of\b/gi,
+    'like': /(?<!\b(?:i|we|they|you|he|she|would|should|could|feel|seems|looks|sounds|very|much|more|just|really|something)\s+)\blike\b/gi,
+    'right': /\bright\b(?=\s*(?:\?|,|$))/gi
+  };
+
+  questions.forEach((q: any) => {
+    if (!q.candidate_answer) return;
+    const text = q.candidate_answer.toLowerCase();
+    
+    Object.entries(fillerRules).forEach(([word, regex]) => {
+      // Reset lastIndex just in case
+      regex.lastIndex = 0;
+      const matches = text.match(regex);
+      if (matches) {
+        aggregatedFillers[word] = (aggregatedFillers[word] || 0) + matches.length;
+      }
     });
-  }
+  });
 
   const highlightFillerWords = (text: string) => {
     if (!text || Object.keys(aggregatedFillers).length === 0) return text;
     
-    // Create a regex for all filler words
-    const words = Object.keys(aggregatedFillers).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    const regex = new RegExp(`\\b(${words.join('|')})\\b`, 'gi');
+    // Combine the regexes of ONLY the filler words that actually appeared in the text
+    const activeRegexes = Object.entries(fillerRules)
+      .filter(([word]) => aggregatedFillers[word] > 0)
+      .map(([, regex]) => regex.source);
+      
+    if (activeRegexes.length === 0) return text;
     
-    const parts = text.split(regex);
+    // Combine all active patterns into one mega-regex using alternation
+    const combinedRegex = new RegExp(`(${activeRegexes.join('|')})`, 'gi');
+    
+    const parts = text.split(combinedRegex);
     return parts.map((part, i) => {
-      if (aggregatedFillers[part.toLowerCase()] !== undefined) {
+      // Because we split by a capture group, every odd index is a matched filler word
+      if (i % 2 !== 0) {
         return <span key={i} className="text-red-500 font-bold underline decoration-red-500/30">{part}</span>;
       }
       return part;

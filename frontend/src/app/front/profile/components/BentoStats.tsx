@@ -27,16 +27,40 @@ export default function BentoStats({ sessions }: BentoStatsProps) {
   
   const totalQuestions = sessions.reduce((acc, s) => acc + (s.total_questions || 0), 0);
   
-  // Aggregate filler words across all sessions
+  // Aggregate filler words across all sessions using SMART regex rules
+  const fillerRules: Record<string, RegExp> = {
+    'um': /\bum\b/gi,
+    'uh': /\buh\b/gi,
+    'ah': /\bah\b/gi,
+    'basically': /\bbasically\b/gi,
+    'literally': /\bliterally\b/gi,
+    'you know': /(?<!\b(?:do|let|make|as)\s+)\byou know\b/gi,
+    'i mean': /\bi mean\b/gi,
+    'sort of': /\bsort of\b/gi,
+    'kind of': /\bkind of\b/gi,
+    'like': /(?<!\b(?:i|we|they|you|he|she|would|should|could|feel|seems|looks|sounds|very|much|more|just|really|something)\s+)\blike\b/gi,
+    'right': /\bright\b(?=\s*(?:\?|,|$))/gi
+  };
+
   const globalFillers: Record<string, number> = {};
+
   sessions.forEach(s => {
-    const v2Feedback = s.recommendation_v2;
-    if (v2Feedback?.version === 2 && v2Feedback.observations?.fillers) {
-      Object.entries(v2Feedback.observations.fillers).forEach(([word, count]) => {
-        const w = word.toLowerCase();
-        globalFillers[w] = (globalFillers[w] || 0) + (count as number);
+    const questions = Array.isArray(s.question_metrics_json) 
+      ? s.question_metrics_json 
+      : (s.question_metrics_json?.questions || []);
+      
+    questions.forEach((q: any) => {
+      if (!q.candidate_answer) return;
+      const text = q.candidate_answer.toLowerCase();
+      
+      Object.entries(fillerRules).forEach(([word, regex]) => {
+        regex.lastIndex = 0;
+        const matches = text.match(regex);
+        if (matches) {
+          globalFillers[word] = (globalFillers[word] || 0) + matches.length;
+        }
       });
-    }
+    });
   });
 
   const topFillers = Object.entries(globalFillers)
