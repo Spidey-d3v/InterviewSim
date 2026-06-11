@@ -426,6 +426,28 @@ async def token(
     )
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
 
+    # Spawn the WebRTC Vision worker
+    worker_token = create_token("vision-agent", room_name)
+    worker_script = Path(__file__).parent.parent / "Vision" / "webrtc_worker.py"
+    python_exe = "C:\\Users\\gaura\\miniconda3\\envs\\pupil310\\python.exe"
+    
+    import subprocess
+    if worker_script.exists():
+        cmd = [
+            python_exe, str(worker_script),
+            LIVEKIT_URL,
+            worker_token,
+            "browser-user",
+            room_name
+        ]
+        try:
+            subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            print(f"👁️ Spawned Vision WebRTC worker for {room_name}")
+        except Exception as e:
+            print(f"⚠️ Failed to spawn Vision worker: {e}")
+    else:
+        print(f"⚠️ Vision worker script not found at {worker_script}")
+
     # Event that fires when the browser's audio track is subscribed by the agent.
     # This is the strongest signal that the browser has fully connected and can
     # receive audio — much later than participant_connected in the lifecycle.

@@ -61,6 +61,47 @@ class L2CSGazeAnalyzer:
         )
         return True
 
+    def analyze_frame(self, frame: np.ndarray, frame_index: int, fps: float, score_history: deque) -> dict[str, Any]:
+        if self._pipeline is None:
+            self.load()
+
+        elapsed = frame_index / fps
+        try:
+            results = self._pipeline.step(frame)
+            face_count = len(results.yaw) if results is not None else 0
+        except ValueError as e:
+            if "need at least one array to stack" in str(e):
+                results = None
+                face_count = 0
+            else:
+                raise
+
+        if face_count == 0:
+            frame_score = 0.0
+            status = "Looking Away"
+            yaw = None
+            pitch = None
+        else:
+            yaw = float(results.yaw[0])
+            pitch = float(results.pitch[0])
+            frame_score = get_frame_score(yaw, pitch)
+            status = _classify_gaze(yaw, pitch)
+
+        score_history.append(frame_score)
+        rolling_score = sum(score_history) / len(score_history) if score_history else 0.0
+        return {
+            "timestamp": _timestamp(elapsed),
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "status": status,
+            "face_count": face_count,
+            "multiple_faces": face_count > 1,
+            "yaw": yaw,
+            "pitch": pitch,
+            "frame_score": round(frame_score, 4),
+            "rolling_score": round(rolling_score, 4),
+            "camera_engagement": round(rolling_score / 5.0, 4),
+        }
+
     def analyze_video(self, video_path: str) -> list[dict[str, Any]]:
         if self._pipeline is None:
             self.load()

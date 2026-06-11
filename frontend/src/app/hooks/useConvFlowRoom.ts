@@ -23,6 +23,7 @@ interface UseConvFlowRoomOptions {
   onTurnEnd: (transcript?: string) => void;
   onInterviewEnd?: (scores: Record<string, unknown>) => void;
   onNewQuestion?: (text: string, meta?: NewQuestionMeta) => void;
+  onGazeMetrics?: (data: any) => void;
   stream: MediaStream | null;
   isAiSpeaking?: boolean;
 }
@@ -31,19 +32,22 @@ export function useConvFlowRoom({
   onTurnEnd, 
   onInterviewEnd, 
   onNewQuestion, 
+  onGazeMetrics,
   stream,
   isAiSpeaking = false 
 }: UseConvFlowRoomOptions) {
   const onTurnEndRef = useRef(onTurnEnd);
   const onInterviewEndRef = useRef(onInterviewEnd);
   const onNewQuestionRef = useRef(onNewQuestion);
+  const onGazeMetricsRef = useRef(onGazeMetrics);
   const roomRef = useRef<Room | null>(null);
 
   useEffect(() => {
     onTurnEndRef.current = onTurnEnd;
     onInterviewEndRef.current = onInterviewEnd;
     onNewQuestionRef.current = onNewQuestion;
-  }, [onTurnEnd, onInterviewEnd, onNewQuestion]);
+    onGazeMetricsRef.current = onGazeMetrics;
+  }, [onTurnEnd, onInterviewEnd, onNewQuestion, onGazeMetrics]);
 
   // Phase 2 Fix: Mute local mic when AI is speaking
   useEffect(() => {
@@ -105,7 +109,6 @@ export function useConvFlowRoom({
 
         if (event === "new_question") {
           if (onNewQuestionRef.current) {
-            // Backend sends 'question_text', not 'text'
             const questionText =
               typeof msg.question_text === 'string'
                 ? msg.question_text
@@ -113,6 +116,13 @@ export function useConvFlowRoom({
                   ? msg.text
                   : '';
             onNewQuestionRef.current(questionText, msg as NewQuestionMeta);
+          }
+        }
+
+        if (event === "chunk_processed") {
+          // Worker sends chunks of gaze data
+          if (onGazeMetricsRef.current) {
+            onGazeMetricsRef.current(msg);
           }
         }
       } catch {
@@ -132,14 +142,21 @@ export function useConvFlowRoom({
         console.log("✅ Connected to Agent Room");
 
         if (stream && stream.getAudioTracks().length > 0) {
-          const { LocalAudioTrack } = await import("livekit-client");
+          const { LocalAudioTrack, LocalVideoTrack } = await import("livekit-client");
           const audioTrack = stream.getAudioTracks()[0];
-          const existing = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-          if (existing && existing.track) {
-            console.log("🎤 Mic already published — skipping duplicate publish");
-          } else {
+          const existingAudio = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+          if (!existingAudio) {
             await room.localParticipant.publishTrack(new LocalAudioTrack(audioTrack));
             console.log("🎤 Mic is LIVE");
+          }
+
+          if (stream.getVideoTracks().length > 0) {
+            const videoTrack = stream.getVideoTracks()[0];
+            const existingVideo = room.localParticipant.getTrackPublication(Track.Source.Camera);
+            if (!existingVideo) {
+              await room.localParticipant.publishTrack(new LocalVideoTrack(videoTrack));
+              console.log("📷 Camera is LIVE for WebRTC Vision Analysis");
+            }
           }
         }
       } catch (err) {

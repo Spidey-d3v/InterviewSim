@@ -4,9 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase';
 
-// Hooks
-import { useVisionSession } from '../hooks/useVisionSession';
-import { useChunkedRecorder } from '../hooks/useChunkedRecorder';
 import { useConvFlowRoom } from '../hooks/useConvFlowRoom';
 
 // Modular Components
@@ -81,39 +78,54 @@ export default function InterviewRoom() {
   // -- Refs for circular dependency --
   const disconnectRoomRef = useRef<() => void>(() => {});
 
+  // -- WebRTC Vision State --
+  const [chunkResults, setChunkResults] = useState<any[]>([]);
+  
   // -- Core Logic Hooks --
-  const {
-    isConnected: visionConnected,
-    chunkResults,
-    pendingChunks,
-    chunkErrors,
-    dismissChunkError,
-    processChunk,
-    error: visionError,
-  } = useVisionSession();
+  // We no longer use useVisionSession and useChunkedRecorder
+  const visionConnected = true;
+  const chunkErrors: string[] = [];
+  const dismissChunkError = () => {};
+  const visionError = null;
 
-  const {
-    stream: cameraStream,
-    isRecording: isChunkRecording,
-    chunkCount,
-    pendingUploads,
-    requestPermissions,
-    start: startRecorder,
-    stop: stopRecorder,
-    flushChunk,
-    releaseStream,
-  } = useChunkedRecorder({
-    onChunkReady: (videoPath, chunkId, chunkIndex) => {
-      const qCtx = questionContextRef.current;
-      chunkQuestionMapRef.current[chunkId] = {
-        question_index: qCtx.questionIndex,
-        question_text: qCtx.questionText,
-        phase: qCtx.phase,
-      };
-      processChunk(videoPath, chunkId, chunkIndex);
-    },
-    onError: (msg) => console.error('[Recorder]', msg),
-  });
+  const isChunkRecording = interviewStarted && !isPaused;
+  const chunkCount = chunkResults.length;
+  const pendingUploads = 0;
+  const pendingChunks = 0;
+
+  // Polyfills for old chunked recorder functions
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  
+  const requestPermissions = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      setCameraStream(stream);
+      return stream;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const releaseStream = useCallback(() => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(t => t.stop());
+      setCameraStream(null);
+    }
+  }, [cameraStream]);
+
+  const startRecorder = () => {};
+  const stopRecorder = () => {};
+  const flushChunk = () => {};
+
+  const handleGazeMetrics = useCallback((msg: any) => {
+    const qCtx = questionContextRef.current;
+    chunkQuestionMapRef.current[msg.chunk_id] = {
+      question_index: qCtx.questionIndex,
+      question_text: qCtx.questionText,
+      phase: qCtx.phase,
+    };
+    setChunkResults(prev => [...prev, { chunkId: msg.chunk_id, chunkIndex: msg.chunk_index, gaze_data: msg.gaze_data }]);
+  }, []);
 
   const handleInterviewEnd = useCallback(async (fScores?: Record<string, unknown>) => {
     console.log("🏁 Finalizing interview session...");
@@ -345,6 +357,7 @@ export default function InterviewRoom() {
     onTurnEnd: handleTurnEnd,
     onInterviewEnd: handleInterviewEnd,
     onNewQuestion: handleNewQuestion,
+    onGazeMetrics: handleGazeMetrics,
     stream: cameraStream,
     isAiSpeaking: questionStatus === 'streaming' || questionStatus === 'processing' || isPaused,
   });
