@@ -21,7 +21,7 @@ def generate_v2_feedback(metrics_data: list, total_questions: int, total_chunks:
     metrics_json_str = json.dumps(metrics_data, indent=2)
     
     total_words = sum(len(q.get("candidate_answer", "").split()) for q in metrics_data)
-    total_minutes = (total_chunks * 3) / 60.0
+    total_minutes = (total_chunks * 15) / 60.0  # Chunks are 15 seconds each
     calculated_wpm = int(total_words / total_minutes) if total_minutes > 0 else 0
 
     prompt = f"""
@@ -39,8 +39,8 @@ For the pace metric, use the calculated Overall WPM ({calculated_wpm}) directly.
 CRITICAL: ONLY count filler words ("um", "uh", "like") that EXACTLY appear in the `candidate_answer` transcript text. If the transcript is perfectly clean, you MUST output 0 for fillers. DO NOT hallucinate filler counts.
 
 New Metric Instructions:
-1. Response Length: Evaluate if their answers were concise (good), rambling (bad), or too short (bad).
-2. Vocabulary: Count weak words ("I think", "maybe", "I tried") vs strong words ("I led", "I delivered", "I achieved") in the transcript.
+1. Response Length: Evaluate if their answers were concise (good), rambling (bad), or too short (bad). Provide a brief explanation of the ideal length for their specific answers.
+2. Vocabulary: Count weak words ("I think", "maybe", "I tried") vs strong words ("I led", "I delivered", "I achieved") in the transcript. Provide the exact list of strong and weak words you found.
 3. Technical Evaluation: You are an expert interviewer. For each question asked, evaluate the technical correctness and quality of the candidate's answer. Give a score out of 5 and a brief technical correction or praise.
 4. STAR Method Analysis: Evaluate how much focus the candidate put on each component of the STAR method across their answers. Output a percentage breakdown (0-100) for Situation, Task, Action, and Result. The total should equal 100.
 5. Skipped Questions: If the candidate's answer is a request to skip the question (e.g., 'Can we skip this phase please?', 'Skip this'), DO NOT penalize them for it. Do not recommend avoiding skipping in the actions. Simply ignore these skipped questions when assessing technical correctness, response length, and vocabulary.
@@ -56,8 +56,17 @@ You MUST return STRICT JSON adhering EXACTLY to the following schema:
       "average": number,
       "multiple_face_frames": number
     }},
-    "response_length": {{ "status": "concise" | "rambling" | "too_short" }},
-    "vocabulary": {{ "strong_words_used": number, "weak_words_used": number, "status": "confident" | "passive" }},
+    "response_length": {{ 
+      "status": "concise" | "rambling" | "too_short",
+      "feedback": "string (explanation of ideal length vs their actual answers)"
+    }},
+    "vocabulary": {{ 
+      "strong_words_used": number, 
+      "weak_words_used": number, 
+      "status": "confident" | "passive",
+      "strong_words_list": ["string"],
+      "weak_words_list": ["string"]
+    }},
     "star_coverage": {{
       "situation": number,
       "task": number,
@@ -115,8 +124,14 @@ Generate the JSON now:
                 "average": 0.0,
                 "multiple_face_frames": 0
             },
-            "response_length": { "status": "balanced" },
-            "vocabulary": { "strong_words_used": 0, "weak_words_used": 0, "status": "confident" },
+            "response_length": { "status": "balanced", "feedback": "" },
+            "vocabulary": { 
+                "strong_words_used": 0, 
+                "weak_words_used": 0, 
+                "status": "confident",
+                "strong_words_list": [],
+                "weak_words_list": []
+            },
             "star_coverage": { "situation": 0, "task": 0, "action": 0, "result": 0 }
         },
         "technical_evaluation": [],

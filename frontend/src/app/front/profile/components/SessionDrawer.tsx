@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
   X, 
@@ -29,6 +29,9 @@ interface SessionDrawerProps {
 }
 
 export default function SessionDrawer({ session, onClose }: SessionDrawerProps) {
+  const [showVocabModal, setShowVocabModal] = useState(false);
+  const [showLengthModal, setShowLengthModal] = useState(false);
+
   if (!session) return null;
 
   // Enriched Metrics Parsing
@@ -136,11 +139,18 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                    <p className="text-2xl font-black text-gray-200">{Math.round((v2Feedback.observations.camera_engagement?.average || 0) * 100)}%</p>
                    <p className="text-xs text-emerald-400 font-bold mt-1">Direct Eye Contact</p>
                 </div>
-                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                <div 
+                  onClick={() => setShowLengthModal(true)}
+                  className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:border-white/20 transition-all"
+                >
                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Length</p>
                    <p className="text-xl font-black text-gray-200 capitalize">{v2Feedback.observations.response_length?.status || 'Balanced'}</p>
+                   <p className="text-xs text-blue-400 mt-1 font-bold">View Details</p>
                 </div>
-                <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                <div 
+                  onClick={() => setShowVocabModal(true)}
+                  className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl cursor-pointer hover:border-white/20 transition-all"
+                >
                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-2">Vocabulary</p>
                    <p className="text-xl font-black text-gray-200 capitalize">{v2Feedback.observations.vocabulary?.status || 'Confident'}</p>
                    <p className="text-xs text-gray-500 mt-1">{v2Feedback.observations.vocabulary?.strong_words_used || 0} Strong | {v2Feedback.observations.vocabulary?.weak_words_used || 0} Weak</p>
@@ -385,7 +395,14 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                       pdf.setFont('helvetica', 'normal');
                       pdf.setTextColor(17, 24, 39);
                       const techLines = pdf.splitTextToSize(tech.feedback, contentWidth - 40);
-                      techLines.forEach((al: string) => { pdf.text(al, margin + 20, y += 12); });
+                      techLines.forEach((al: string) => { 
+                        if (y + 12 > pdf.internal.pageSize.getHeight() - 50) {
+                          pdf.addPage();
+                          y = margin;
+                        }
+                        y += 12;
+                        pdf.text(al, margin + 20, y); 
+                      });
                       y += 20;
                     });
                   }
@@ -401,6 +418,83 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
 
         </div>
       </motion.div>
+
+      {/* Vocab Modal */}
+      {showVocabModal && v2Feedback?.observations?.vocabulary && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+          <div className="bg-[#111827] border border-white/10 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">Vocabulary Analysis</h3>
+              <button onClick={() => setShowVocabModal(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm font-bold text-emerald-400 mb-3">Strong Words Used ({v2Feedback.observations.vocabulary.strong_words_used || 0})</p>
+                <div className="flex flex-wrap gap-2">
+                  {(v2Feedback.observations.vocabulary.strong_words_list || []).map((w: string, i: number) => (
+                    <span key={i} className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg">{w}</span>
+                  ))}
+                  {(!v2Feedback.observations.vocabulary.strong_words_list || v2Feedback.observations.vocabulary.strong_words_list.length === 0) && <span className="text-gray-500 text-xs italic">No strong words detected in the transcript.</span>}
+                </div>
+              </div>
+              <div className="border-t border-white/5 pt-4">
+                <p className="text-sm font-bold text-red-400 mb-3">Weak Words Used ({v2Feedback.observations.vocabulary.weak_words_used || 0})</p>
+                <div className="flex flex-wrap gap-2">
+                  {(v2Feedback.observations.vocabulary.weak_words_list || []).map((w: string, i: number) => (
+                    <span key={i} className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg">{w}</span>
+                  ))}
+                  {(!v2Feedback.observations.vocabulary.weak_words_list || v2Feedback.observations.vocabulary.weak_words_list.length === 0) && <span className="text-gray-500 text-xs italic">No weak words detected. Great job!</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Length Modal */}
+      {showLengthModal && v2Feedback?.observations?.response_length && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+          <div className="bg-[#111827] border border-white/10 rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto custom-scrollbar shadow-2xl">
+            <div className="flex justify-between items-center mb-6 sticky top-0 bg-[#111827] pt-2 pb-4 border-b border-white/5 z-10">
+              <h3 className="text-lg font-bold text-white">Response Length Analysis</h3>
+              <button onClick={() => setShowLengthModal(false)}><X size={20} className="text-gray-500 hover:text-white" /></button>
+            </div>
+            
+            <div className="p-4 bg-blue-500/10 rounded-xl border border-blue-500/20 mb-6">
+              <p className="text-sm text-blue-100 leading-relaxed font-medium">
+                <span className="font-bold text-blue-400 block mb-1">AI Recommendation:</span>
+                {v2Feedback.observations.response_length.feedback || "Your response lengths were generally well-balanced. Aim for 1-2 minutes per answer to remain concise and engaging."}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Your Responses</h4>
+              {questions.map((q: any, idx: number) => {
+                const wordCount = q.candidate_answer ? q.candidate_answer.trim().split(/\s+/).filter((w: string) => w.length > 0).length : 0;
+                let lengthStatus = 'balanced';
+                if (wordCount > 250) lengthStatus = 'rambling';
+                if (wordCount < 50) lengthStatus = 'too_short';
+                
+                return (
+                  <div key={idx} className="p-4 rounded-xl bg-white/5 border border-white/5">
+                    <div className="flex justify-between items-start mb-2">
+                      <p className="text-xs font-bold text-gray-300">Q{idx + 1}: {q.question_text}</p>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${
+                        lengthStatus === 'rambling' ? 'bg-red-500/20 text-red-400' :
+                        lengthStatus === 'too_short' ? 'bg-yellow-500/20 text-yellow-400' :
+                        'bg-emerald-500/20 text-emerald-400'
+                      }`}>
+                        {wordCount} words
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-400 italic line-clamp-3 hover:line-clamp-none transition-all">"{q.candidate_answer || 'No answer recorded.'}"</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
