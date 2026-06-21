@@ -215,6 +215,28 @@ export default function InterviewRoom() {
       grouped.get(qCtx.question_index)?.chunks.push(mappedChunk);
     });
 
+    // 1.5 Ensure all questions with transcripts are included even if they have no video chunks
+    Object.entries(candidateAnswerMapRef.current).forEach(([qIndexStr, answer]) => {
+      const qIndex = parseInt(qIndexStr, 10);
+      if (!grouped.has(qIndex)) {
+        grouped.set(qIndex, {
+          question_index: qIndex,
+          // Fallback if we didn't get chunk context, we use the answer but might miss the exact question text
+          question_text: aiQuestions[qIndex] || 'Unknown Question', 
+          candidate_answer: answer,
+          phase: 'unknown',
+          chunks: [],
+          question_averages: { wpm: null, focus: null },
+        });
+      } else {
+        // Just make sure the answer is set in case it wasn't yet
+        const existing = grouped.get(qIndex);
+        if (existing && !existing.candidate_answer) {
+          existing.candidate_answer = answer;
+        }
+      }
+    });
+
     // 2. Calculate the ACTUAL averages for each question group
     const metrics = Array.from(grouped.values());
     metrics.forEach((m) => {
@@ -339,8 +361,20 @@ export default function InterviewRoom() {
     });
     const fsHandler = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', fsHandler);
-    return () => { releaseStream(); document.removeEventListener('fullscreenchange', fsHandler); };
-  }, [releaseStream, requestPermissions]);
+    
+    return () => { 
+      document.removeEventListener('fullscreenchange', fsHandler); 
+    };
+  }, []); // Run exactly once on mount!
+
+  // Dedicated unmount cleanup for the camera stream
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(t => t.stop());
+      }
+    };
+  }, [cameraStream]);
 
   useEffect(() => {
     const text = (streamingQuestion ?? aiQuestions[questionIndex] ?? 'Introduce yourself.').trim();
@@ -423,16 +457,6 @@ export default function InterviewRoom() {
           onPrev={() => setQuestionIndex(i => Math.max(0, i - 1))}
           onNext={() => setQuestionIndex(i => Math.min(aiQuestions.length - 1, i + 1))}
         />
-        {chunkErrors.length > 0 && (
-          <div className="fixed bottom-24 right-4 z-50 flex flex-col gap-2 max-w-sm">
-            {chunkErrors.map((err, i) => (
-              <div key={i} className="px-4 py-3 bg-red-900/80 border border-red-500/40 rounded-xl backdrop-blur-sm text-xs text-red-200 flex justify-between items-center">
-                <span>{err}</span>
-                <button onClick={() => dismissChunkError(i)} className="ml-4 text-red-400 hover:text-white">✕</button>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <InterviewControls

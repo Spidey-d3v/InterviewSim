@@ -47,18 +47,7 @@ export function InterviewHeader({
             <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
             <span className="text-sm text-yellow-400 font-mono font-bold uppercase tracking-widest">Paused</span>
           </div>
-        ) : isChunkRecording ? (
-          <div className="flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-sm text-red-400 font-mono">● Chunk {chunkCount} | {formatTime(recordingTime)}</span>
-          </div>
         ) : null}
-        {pendingChunks > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-yellow-500/20 border border-yellow-500/30 rounded-full">
-            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-            <span className="text-sm text-yellow-400 font-mono">Analyzing {pendingChunks} chunks…</span>
-          </div>
-        )}
       </div>
 
       <div className="flex items-center gap-4">
@@ -71,7 +60,6 @@ export function InterviewHeader({
             Fullscreen
           </button>
         )}
-        {visionError ? <StatusBadge label="Vision Offline" color="red" /> : visionConnected && <StatusBadge label="Vision Server" color="green" />}
         {permissionStatus === 'denied' && <StatusBadge label="Camera/Mic Denied" color="red" />}
         <button onClick={() => confirm('End the interview?') && onLeave()} className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors">
           End Interview

@@ -190,8 +190,12 @@ export function useConvFlowRoom({
 
   const sendData = useCallback(async (data: Record<string, unknown>) => {
     if (roomRef.current && roomRef.current.localParticipant) {
-      const payload = new TextEncoder().encode(JSON.stringify(data));
-      await roomRef.current.localParticipant.publishData(payload, { reliable: true });
+      try {
+        const payload = new TextEncoder().encode(JSON.stringify(data));
+        await roomRef.current.localParticipant.publishData(payload, { reliable: true });
+      } catch (err) {
+        console.warn("Failed to send data to LiveKit room (it may be closed already):", err);
+      }
     }
   }, []);
 

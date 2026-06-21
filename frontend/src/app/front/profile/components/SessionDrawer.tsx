@@ -419,20 +419,33 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                     y += 20;
                     v2Feedback.technical_evaluation.forEach((tech: any) => {
                       if (y > pdf.internal.pageSize.getHeight() - 50) { pdf.addPage(); y = margin; }
-                      pdf.setFontSize(9);
+                      
+                      const qData = questions[tech.question_index];
+                      const qText = qData && qData.question_text ? qData.question_text : "Unknown Question";
+                      
+                      pdf.setFontSize(10);
                       pdf.setFont('helvetica', 'bold');
-                      pdf.setTextColor(99, 102, 241);
-                      pdf.text(`Q${tech.question_index + 1} - Score: ${tech.accuracy_score_out_of_5}/5`, margin, y);
+                      pdf.setTextColor(99, 102, 241); // Indigo color for question
+                      
+                      const qLines = pdf.splitTextToSize(`Q${tech.question_index + 1}: ${qText} (Score: ${tech.accuracy_score_out_of_5}/5)`, contentWidth);
+                      qLines.forEach((ql: string) => {
+                        if (y + 14 > pdf.internal.pageSize.getHeight() - 50) { pdf.addPage(); y = margin; }
+                        pdf.text(ql, margin, y);
+                        y += 14;
+                      });
+
+                      pdf.setFontSize(9);
                       pdf.setFont('helvetica', 'normal');
                       pdf.setTextColor(17, 24, 39);
-                      const techLines = pdf.splitTextToSize(tech.feedback, contentWidth - 40);
+                      
+                      const techLines = pdf.splitTextToSize(tech.feedback, contentWidth - 20);
                       techLines.forEach((al: string) => { 
                         if (y + 12 > pdf.internal.pageSize.getHeight() - 50) {
                           pdf.addPage();
                           y = margin;
                         }
                         y += 12;
-                        pdf.text(al, margin + 20, y); 
+                        pdf.text(al, margin + 10, y); 
                       });
                       y += 20;
                     });

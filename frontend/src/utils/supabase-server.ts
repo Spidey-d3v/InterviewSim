@@ -20,6 +20,11 @@ export async function createServerSupabaseClient() {
           } catch {}
         },
       },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      }
     }
   )
 }

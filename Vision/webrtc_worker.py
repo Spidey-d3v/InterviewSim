@@ -52,7 +52,7 @@ async def main():
             
         chunk_id = f"{chunk_id_base}-chunk-{chunk_index}"
         payload = {
-            "type": "chunk_processed", # Match old format!
+            "event": "chunk_processed", # Use 'event' to match useConvFlowRoom.ts
             "chunk_id": chunk_id,
             "chunk_index": chunk_index,
             "gaze_data": list(chunk_frames)
@@ -60,7 +60,7 @@ async def main():
         
         data = json.dumps(payload).encode("utf-8")
         try:
-            await room.local_participant.publish_data(data, rtc.DataPacketKind.RELIABLE)
+            await room.local_participant.publish_data(data, reliable=True)
             logger.info(f"Published chunk {chunk_index} with {len(chunk_frames)} frames")
         except Exception as e:
             logger.error(f"Failed to publish chunk {chunk_index}: {e}")
@@ -78,8 +78,29 @@ async def main():
             
     @room.on("disconnected")
     def on_disconnected():
-        logger.info("Room disconnected, exiting worker.")
-        asyncio.get_event_loop().stop()
+        logger.info("Room disconnected, exiting worker. Flushing final chunks...")
+        if len(chunk_frames) > 0:
+            # Create a synchronous task or run until complete to ensure it flushes
+            try:
+                loop = asyncio.get_event_loop()
+                loop.create_task(flush_chunk())
+                # Delay slightly to allow the publish to go through before stopping
+                loop.call_later(1.0, loop.stop)
+            except Exception as e:
+                logger.error(f"Error flushing chunks on disconnect: {e}")
+        else:
+            asyncio.get_event_loop().stop()
+
+    @room.on("data_received")
+    def on_data_received(data_packet: rtc.DataPacket):
+        try:
+            msg = json.loads(data_packet.data.decode("utf-8"))
+            event = msg.get("event")
+            if event == "turn_end" or (event == "new_question" and msg.get("is_final") is True):
+                logger.info(f"Received {event} (is_final={msg.get('is_final', 'N/A')}), flushing current video chunk at turn boundary!")
+                asyncio.create_task(flush_chunk())
+        except Exception:
+            pass
 
     async def process_video_track(track: rtc.RemoteVideoTrack):
         nonlocal frame_index, score_history, chunk_frames
@@ -91,16 +112,18 @@ async def main():
                 continue
                 
             try:
-                argb_frame = frame.convert(rtc.VideoBufferType.ARGB)
-                arr = np.frombuffer(argb_frame.data, dtype=np.uint8)
-                img_argb = arr.reshape((argb_frame.height, argb_frame.width, 4))
-                img_bgr = cv2.cvtColor(img_argb, cv2.COLOR_BGRA2BGR)
+                # Ensure correct color conversion so L2CS-Net receives proper BGR (not corrupted ARG)
+                video_frame = frame.frame if hasattr(frame, 'frame') else frame
+                rgba_frame = video_frame.convert(rtc.VideoBufferType.RGBA)
+                arr = np.frombuffer(rgba_frame.data, dtype=np.uint8)
+                img_rgba = arr.reshape((rgba_frame.height, rgba_frame.width, 4))
+                img_bgr = cv2.cvtColor(img_rgba, cv2.COLOR_RGBA2BGR)
                 
                 result = analyzer.analyze_frame(img_bgr, frame_index, fps, score_history)
                 chunk_frames.append(result)
                 
-                # If we collected ~15 seconds of frames (30 frames at 2 FPS)
-                if len(chunk_frames) >= 30:
+                # Fallback flush if the user talks for more than 5 minutes continuously (600 frames)
+                if len(chunk_frames) >= 600:
                     await flush_chunk()
                     
             except Exception as e:

@@ -20,7 +20,7 @@ export default function CalibrationFlow({
 
   useEffect(() => {
     if (step === 'calibrating' && countdown > 0) {
-      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      const timer = setTimeout(() => setCountdown(prev => prev - 1), 1000);
       return () => clearTimeout(timer);
     } else if (step === 'calibrating' && countdown === 0) {
       // Trigger calibration
@@ -29,7 +29,7 @@ export default function CalibrationFlow({
         setStep('ready');
       }, 1000);
     }
-  }, [step, countdown, onCalibrate]);
+  }, [step, countdown]);
 
   const handleNext = () => {
     if (step === 'intro') {

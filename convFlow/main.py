@@ -431,6 +431,8 @@ async def token(
     worker_script = Path(__file__).parent.parent / "Vision" / "webrtc_worker.py"
     python_exe = "C:\\Users\\gaura\\miniconda3\\envs\\pupil310\\python.exe"
     
+    print(f"👁️ Spawned Vision WebRTC worker for {room_name}. Logs will appear in this terminal.")
+    
     import subprocess
     if worker_script.exists():
         cmd = [
@@ -441,8 +443,10 @@ async def token(
             room_name
         ]
         try:
-            subprocess.Popen(cmd, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
-            print(f"👁️ Spawned Vision WebRTC worker for {room_name}")
+            subprocess.Popen(
+                cmd, 
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
         except Exception as e:
             print(f"⚠️ Failed to spawn Vision worker: {e}")
     else:

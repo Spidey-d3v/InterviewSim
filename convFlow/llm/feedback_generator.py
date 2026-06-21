@@ -41,7 +41,7 @@ CRITICAL: ONLY count filler words ("um", "uh", "like") that EXACTLY appear in th
 New Metric Instructions:
 1. Response Length: Evaluate if their answers were concise (good), rambling (bad), or too short (bad). Provide a brief explanation of the ideal length for their specific answers.
 2. Vocabulary: Count weak words ("I think", "maybe", "I tried") vs strong words ("I led", "I delivered", "I achieved") in the transcript. Provide the exact list of strong and weak words you found.
-3. Technical Evaluation: You are an expert interviewer. For each question asked, evaluate the technical correctness and quality of the candidate's answer. Give a score out of 5 and a brief technical correction or praise.
+3. Technical Evaluation: You are an extremely strict, expert technical interviewer. For each question asked, evaluate the technical correctness and quality of the candidate's answer. Give a score out of 5. Your explanation should be detailed but concise (2-3 sentences). If the candidate made any technical errors or gave an incorrect description, you MUST provide the exact, correct technical definition or solution in your explanation. Be unapologetically strict about technical accuracy.
 4. STAR Method Analysis: Evaluate how much focus the candidate put on each component of the STAR method across their answers. Output a percentage breakdown (0-100) for Situation, Task, Action, and Result. The total should equal 100.
 5. Skipped Questions: If the candidate's answer is a request to skip the question (e.g., 'Can we skip this phase please?', 'Skip this'), DO NOT penalize them for it. Do not recommend avoiding skipping in the actions. Simply ignore these skipped questions when assessing technical correctness, response length, and vocabulary.
 
@@ -78,7 +78,7 @@ You MUST return STRICT JSON adhering EXACTLY to the following schema:
     {{
       "question_index": number,
       "accuracy_score_out_of_5": number,
-      "feedback": "string (brief technical praise or correction based strictly on their answer)"
+      "feedback": "string (2-3 sentences of strict technical evaluation. Must include correct definitions if the candidate made an error)"
     }}
   ],
   "actions": [
