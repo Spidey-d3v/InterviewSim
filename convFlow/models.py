@@ -42,3 +42,36 @@ class InterviewSession(Base):
     recommendation_v2 = Column(JSONB, nullable=True)
 
     profile = relationship("Profile", back_populates="sessions")
+
+class JobRole(Base):
+    __tablename__ = 'job_roles'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    role_name = Column(String, nullable=False, unique=True)
+    description = Column(String, nullable=True)
+    panel_size = Column(Integer, nullable=False, default=1)
+    
+    question_bank_json = Column(JSONB, nullable=False, server_default='[]')
+    
+    created_at = Column(DateTime(timezone=True), server_default=text('now()'))
+    updated_at = Column(DateTime(timezone=True), server_default=text('now()'), onupdate=lambda: datetime.now(timezone.utc))
+
+class InterviewPrompt(Base):
+    __tablename__ = 'interview_prompts'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prompt_key = Column(String, nullable=False, unique=True)  # e.g., 'core_tech', 'intro', 'resume', 'situational'
+    prompt_text = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    
+    updated_at = Column(DateTime(timezone=True), server_default=text('now()'), onupdate=lambda: datetime.now(timezone.utc))
+
+class EngineConfig(Base):
+    __tablename__ = 'engine_configs'
+
+    id = Column(Integer, primary_key=True, default=1)
+    llm_temperature = Column(Float, nullable=False, default=0.7)
+    llm_max_tokens = Column(Integer, nullable=False, default=150)
+    vision_focus_threshold = Column(Float, nullable=False, default=0.3)
+    
+    updated_at = Column(DateTime(timezone=True), server_default=text('now()'), onupdate=lambda: datetime.now(timezone.utc))

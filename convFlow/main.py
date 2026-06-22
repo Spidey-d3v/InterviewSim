@@ -1063,3 +1063,53 @@ def get_profile(user_id: str, db: Session = Depends(get_db)):
 def get_sessions(user_id: str, db: Session = Depends(get_db)):
     sessions = db.query(InterviewSession).filter(InterviewSession.user_id == user_id).order_by(InterviewSession.created_at.desc()).all()
     return sessions
+
+# --- Admin API Routes ---
+@app.get("/api/admin/sessions")
+def admin_get_all_sessions(db: Session = Depends(get_db)):
+    # Fetch all sessions along with profile name/email
+    from sqlalchemy.orm import joinedload
+    sessions = db.query(InterviewSession).options(joinedload(InterviewSession.profile)).order_by(InterviewSession.created_at.desc()).all()
+    
+    result = []
+    for s in sessions:
+        result.append({
+            "id": str(s.id),
+            "session_id": s.session_id,
+            "started_at": s.started_at.isoformat() if s.started_at else None,
+            "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+            "average_focus": s.average_focus,
+            "llm_evaluation_json": s.llm_evaluation_json,
+            "recommendation_v2": s.recommendation_v2,
+            "total_questions": s.total_questions,
+            "profile": {
+                "full_name": s.profile.full_name if s.profile else None,
+                "email": s.profile.email if s.profile else None
+            } if s.profile else None
+        })
+    return result
+
+@app.get("/api/admin/sessions/{id}")
+def admin_get_session(id: str, db: Session = Depends(get_db)):
+    from sqlalchemy.orm import joinedload
+    s = db.query(InterviewSession).options(joinedload(InterviewSession.profile)).filter(InterviewSession.id == id).first()
+    
+    if not s:
+        raise HTTPException(status_code=404, detail="Session not found")
+        
+    return {
+        "id": str(s.id),
+        "session_id": s.session_id,
+        "started_at": s.started_at.isoformat() if s.started_at else None,
+        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+        "average_focus": s.average_focus,
+        "llm_evaluation_json": s.llm_evaluation_json,
+        "recommendation_v2": s.recommendation_v2,
+        "question_metrics_json": s.question_metrics_json,
+        "total_questions": s.total_questions,
+        "profile": {
+            "full_name": s.profile.full_name if s.profile else None,
+            "email": s.profile.email if s.profile else None,
+            "resume_text": s.profile.resume_text if s.profile else None
+        } if s.profile else None
+    }

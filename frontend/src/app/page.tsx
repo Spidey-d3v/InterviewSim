@@ -24,13 +24,23 @@ export default function LandingPage() {
   );
   const heroRef = useRef<HTMLDivElement>(null);
 
-  const ROLES = [
+  const [rolesList, setRolesList] = useState<string[]>([
     'Full Stack Developer',
     'AI Engineer',
     'DevOps Engineer',
     'Electrical and Computer Science Engineer',
     'Cybersecurity'
-  ];
+  ]);
+
+  useEffect(() => {
+    import('@/app/actions').then(({ getRoles }) => {
+      getRoles().then(fetchedRoles => {
+        if (fetchedRoles && fetchedRoles.length > 0) {
+          setRolesList(fetchedRoles);
+        }
+      });
+    });
+  }, []);
 
   const checkAuthStatus = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -407,13 +417,14 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-col gap-3">
-              {ROLES.map(role => (
+              {rolesList.map(role => (
                 <button key={role} onClick={() => handleRoleSelect(role)} className="px-4 py-4 text-left bg-white/5 hover:bg-white/10 border border-white/10 hover:border-purple-500/50 rounded-xl transition-all font-medium text-white group flex items-center justify-between">
                   {role}
-                  <CheckCircle size={18} className="text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  <div className="w-6 h-6 rounded-full bg-white/5 group-hover:bg-purple-500/20 flex items-center justify-center transition-colors">
+                    <CheckCircle className="w-4 h-4 text-white/30 group-hover:text-purple-400 transition-colors" />
+                  </div>
                 </button>
-              ))}
-            </div>
+              ))}</div>
           </div>
         </div>
       )}

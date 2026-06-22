@@ -40,12 +40,13 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isAuthRoute = pathname.startsWith('/auth')
   const isFrontRoute = pathname.startsWith('/front')
+  const isAdminRoute = pathname.startsWith('/admin')
 
   const expiresAtValue = request.cookies.get('app_session_expires_at')?.value
   const expiresAt = expiresAtValue ? Number(expiresAtValue) : null
   const isExpired = !expiresAt || Number.isNaN(expiresAt) || Date.now() >= expiresAt
 
-  if (isExpired && isFrontRoute) {
+  if (isExpired && (isFrontRoute || isAdminRoute)) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     const redirectResponse = NextResponse.redirect(url)
@@ -53,10 +54,23 @@ export async function middleware(request: NextRequest) {
     return redirectResponse
   }
 
-  if (!user && isFrontRoute) {
+  if (!user && (isFrontRoute || isAdminRoute)) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
+  }
+
+  // Admin Route Protection
+  if (user && isAdminRoute) {
+    const adminEmails = process.env.ADMIN_EMAILS ? process.env.ADMIN_EMAILS.split(',') : ['gaurav.ghosh.23cse@bmu.edu.in'];
+    const userEmail = user.email || '';
+    
+    // If user is not in the admin list, redirect to home page or show 403
+    if (!adminEmails.includes(userEmail)) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
   }
 
   if (user && isAuthRoute && !isExpired) {
@@ -69,5 +83,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/auth/:path*', '/front/:path*'],
+  matcher: ['/', '/auth/:path*', '/front/:path*', '/admin/:path*'],
 }

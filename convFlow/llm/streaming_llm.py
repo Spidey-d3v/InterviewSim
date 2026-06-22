@@ -22,6 +22,19 @@ class StreamingInterviewLLM:
         self.model_name = model_name
         self.temperature = temperature
         self.max_tokens = max_tokens
+        
+        # Override with DB config if available
+        try:
+            from database import SessionLocal
+            from models import EngineConfig
+            db = SessionLocal()
+            config = db.query(EngineConfig).filter(EngineConfig.id == 1).first()
+            if config:
+                self.temperature = config.llm_temperature
+                self.max_tokens = config.llm_max_tokens
+            db.close()
+        except Exception as e:
+            print(f"Error loading EngineConfig: {e}")
 
     async def stream_response(
         self,

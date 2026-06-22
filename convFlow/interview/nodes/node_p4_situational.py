@@ -15,7 +15,30 @@ async def node_p4_situational(
     Returns plain text (not JSON).
     """
 
-    prompt = f"""
+    from database import SessionLocal
+    from models import InterviewPrompt
+
+    transcript_context = transcript if transcript.strip() else "Situational round has not started yet."
+
+    db = SessionLocal()
+    prompt_obj = db.query(InterviewPrompt).filter(InterviewPrompt.prompt_key == 'situational').first()
+    db.close()
+
+    if prompt_obj and prompt_obj.prompt_text:
+        prompt_template = prompt_obj.prompt_text
+        prompt = prompt_template.format(
+            interviewer_name=interviewer_name,
+            job_role=job_role,
+            company_name=company_name,
+            candidate_ref=candidate_name,
+            resume_context=resume_context,
+            job_description=job_description,
+            summary_till_now=summary_till_now,
+            transcript_context=transcript_context,
+            candidate_name=candidate_name
+        )
+    else:
+        prompt = f"""
 You are a professional interviewer named {interviewer_name} conducting a {job_role} interview at {company_name} for a fresher candidate named {candidate_name}.
 Phase: SITUATIONAL QUESTIONS
 Tone: Conversational, Natural
@@ -36,7 +59,7 @@ Rules:
 - Make scenario specific and realistic and ask one at a time
 - Themes for personality assessment situations (managing conflict, dealing with tight deadlines, handling mistakes, and navigating ethical dilemmas)
 - Themes for technical situations (debugging complex issues, managing tight deadlines, resolving technical disagreements, and handling project failures)
-Conversation This Phase: if transcript exists, then {transcript} else {"Situational round has not started yet."}
+Conversation This Phase: {transcript_context}
 """
 
     result = ""
