@@ -1,9 +1,12 @@
 import uuid
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, text
+from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, text, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
-from database import Base
+try:
+    from database import Base
+except ImportError:
+    from .database import Base
 
 class Profile(Base):
     __tablename__ = 'profiles'
@@ -42,6 +45,19 @@ class InterviewSession(Base):
     recommendation_v2 = Column(JSONB, nullable=True)
 
     profile = relationship("Profile", back_populates="sessions")
+    timeline_events = relationship("InterviewTimeline", back_populates="session", cascade="all, delete-orphan")
+
+class InterviewTimeline(Base):
+    __tablename__ = 'interview_timeline'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(String, ForeignKey('interview_sessions.session_id', ondelete='CASCADE'), nullable=False)
+    timestamp_seconds = Column(Float, nullable=False)
+    metric_type = Column(String, nullable=False) # 'SPEECH' or 'VISION'
+    is_red_flag = Column(Boolean, nullable=False, default=False)
+    raw_data_json = Column(JSONB, nullable=False)
+    
+    session = relationship("InterviewSession", back_populates="timeline_events")
 
 class JobRole(Base):
     __tablename__ = 'job_roles'

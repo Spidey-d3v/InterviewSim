@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import {
   Room,
   RoomEvent,
@@ -26,6 +26,7 @@ interface UseConvFlowRoomOptions {
   onGazeMetrics?: (data: any) => void;
   stream: MediaStream | null;
   isAiSpeaking?: boolean;
+  sessionId?: string | null;
 }
 
 export function useConvFlowRoom({ 
@@ -34,8 +35,10 @@ export function useConvFlowRoom({
   onNewQuestion, 
   onGazeMetrics,
   stream,
-  isAiSpeaking = false 
+  isAiSpeaking = false,
+  sessionId 
 }: UseConvFlowRoomOptions) {
+  const [isConnected, setIsConnected] = useState(false);
   const onTurnEndRef = useRef(onTurnEnd);
   const onInterviewEndRef = useRef(onInterviewEnd);
   const onNewQuestionRef = useRef(onNewQuestion);
@@ -67,7 +70,7 @@ export function useConvFlowRoom({
   }, [isAiSpeaking]);
 
   useEffect(() => {
-    if (!stream) return;
+    if (!stream || !sessionId) return;
 
     // Prevent duplicate connections: if a room already exists, skip connecting again.
     if (roomRef.current) {
@@ -133,7 +136,7 @@ export function useConvFlowRoom({
     async function connect(signal?: AbortSignal) {
       try {
         // Use cached token to ensure only one /token request per client join
-        const token = await getLiveKitToken();
+        const token = await getLiveKitToken(false, undefined, undefined, sessionId);
         if (signal?.aborted) {
           console.log('useConvFlowRoom: aborted before connecting');
           return;
@@ -154,8 +157,8 @@ export function useConvFlowRoom({
             const videoTrack = stream.getVideoTracks()[0];
             const existingVideo = room.localParticipant.getTrackPublication(Track.Source.Camera);
             if (!existingVideo) {
-              await room.localParticipant.publishTrack(new LocalVideoTrack(videoTrack));
-              console.log("📷 Camera is LIVE for WebRTC Vision Analysis");
+              await room.localParticipant.publishTrack(new LocalVideoTrack(videoTrack), { simulcast: false });
+              console.log("📷 Camera is LIVE for WebRTC Vision Analysis (Simulcast Disabled)");
             }
           }
         }
@@ -178,7 +181,7 @@ export function useConvFlowRoom({
       room.disconnect();
       roomRef.current = null;
     };
-  }, [stream]);
+  }, [stream, sessionId]);
 
   const disconnect = useCallback(() => {
     if (roomRef.current) {

@@ -34,6 +34,7 @@ interface QuestionMeta {
  * It manages the camera stream, voice connection, and behavioral analysis.
  */
 import { getLiveKitToken, clearLiveKitToken } from '../../utils/livekitToken';
+import { useLocalVideoRecorder } from '../hooks/useLocalVideoRecorder';
 
 export default function InterviewRoom() {
   const router = useRouter();
@@ -95,6 +96,9 @@ export default function InterviewRoom() {
 
   // Polyfills for old chunked recorder functions
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  // -- Start Local Video Recording --
+  useLocalVideoRecorder(cameraStream, interviewStarted && !isPaused, interviewSessionId);
   
   const requestPermissions = useCallback(async () => {
     try {
@@ -264,7 +268,7 @@ export default function InterviewRoom() {
       let wpmVal: number | null = null;
       if (m.candidate_answer && totalFrames > 0) {
         const wordCount = m.candidate_answer.trim().split(/\s+/).filter(w => w.length > 0).length;
-        const durationMinutes = (totalFrames / (27 / 14)) / 60; // 27 fps transcoded, sampled every 14 frames
+        const durationMinutes = (totalFrames / 10) / 60; // 10 fps processed by agent.py
         wpmVal = durationMinutes > 0.05 ? Math.round(wordCount / durationMinutes) : null;
       }
 
@@ -394,6 +398,7 @@ export default function InterviewRoom() {
     onGazeMetrics: handleGazeMetrics,
     stream: cameraStream,
     isAiSpeaking: questionStatus === 'streaming' || questionStatus === 'processing' || isPaused,
+    sessionId: interviewSessionId,
   });
 
   useEffect(() => {

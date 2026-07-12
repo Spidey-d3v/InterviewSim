@@ -1,3 +1,16 @@
+import ssl
+import certifi
+
+# Fix for Windows SSL ASN1 NOT_ENOUGH_DATA error caused by aiohttp/livekit/torch
+orig_create_default_context = ssl.create_default_context
+def patched_create_default_context(purpose=ssl.Purpose.SERVER_AUTH, *, cafile=None, capath=None, cadata=None):
+    if cafile is None:
+        cafile = certifi.where()
+    return orig_create_default_context(purpose=purpose, cafile=cafile, capath=capath, cadata=cadata)
+
+ssl.create_default_context = patched_create_default_context
+ssl._create_default_https_context = patched_create_default_context
+
 import asyncio
 import numpy as np
 from scipy.signal import decimate as _scipy_decimate
@@ -26,7 +39,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
-from database import get_db
+from database import get_db, SessionLocal
 from models import Profile, InterviewSession
 import uuid
 
@@ -309,9 +322,14 @@ async def token(
     user_id: str | None = Query(default=None),
     role: str | None = Query(default=None),
     panel_size: int = Query(default=1), # New parameter
+    session_id: str | None = Query(default=None),
     db: Session = Depends(get_db)
 ):
-    room_name = f"interview_{uuid4().hex}"
+    if session_id:
+        room_name = session_id
+    else:
+        room_name = f"interview_{uuid4().hex}"
+
     identity = "browser-user"
 
     resume_context = ""
@@ -349,6 +367,20 @@ async def token(
                 print(f"⚠️ [DEBUG] No profile found in Supabase for user_id: {user_id}")
         except Exception as e:
             print(f"⚠️ Could not load resume context for user {user_id}: {e}")
+
+        db = SessionLocal()
+        try:
+            session_entry = db.query(InterviewSession).filter(InterviewSession.session_id == room_name).first()
+            if not session_entry:
+                session_entry = InterviewSession(session_id=room_name, user_id=user_id)
+                db.add(session_entry)
+                db.commit()
+                print(f"✅ Pre-created InterviewSession {room_name} in database to satisfy foreign keys.")
+        except Exception as e:
+            print(f"⚠️ Failed to pre-create session in DB: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
     token = create_token(identity, room_name)
 
@@ -427,30 +459,32 @@ async def token(
     voice_agents[room_name] = StreamingVoiceAgent(llm, tts, audio_source, interview_engines[room_name])
 
     # Spawn the WebRTC Vision worker
-    worker_token = create_token("vision-agent", room_name)
-    worker_script = Path(__file__).parent.parent / "Vision" / "webrtc_worker.py"
+    timeline_token = create_token("timeline-agent", room_name)
+    
+    timeline_script = Path(__file__).parent.parent / "livekit-worker" / "agent.py"
     python_exe = "C:\\Users\\gaura\\miniconda3\\envs\\pupil310\\python.exe"
     
-    print(f"👁️ Spawned Vision WebRTC worker for {room_name}. Logs will appear in this terminal.")
+    print(f"👁️ Spawned Timeline Agent for {room_name}. Logs will appear in this terminal.")
     
     import subprocess
-    if worker_script.exists():
-        cmd = [
-            python_exe, str(worker_script),
+    
+    if timeline_script.exists():
+        cmd2 = [
+            python_exe, str(timeline_script),
             LIVEKIT_URL,
-            worker_token,
+            timeline_token,
             "browser-user",
             room_name
         ]
         try:
             subprocess.Popen(
-                cmd, 
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+                cmd2, 
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
             )
         except Exception as e:
-            print(f"⚠️ Failed to spawn Vision worker: {e}")
+            print(f"⚠️ Failed to spawn Timeline Agent: {e}")
     else:
-        print(f"⚠️ Vision worker script not found at {worker_script}")
+        print(f"⚠️ Timeline Agent script not found at {timeline_script}")
 
     # Event that fires when the browser's audio track is subscribed by the agent.
     # This is the strongest signal that the browser has fully connected and can

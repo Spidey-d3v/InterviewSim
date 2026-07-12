@@ -68,4 +68,5 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-.understand-anything/
+.understand-anything/demos/
+demos/

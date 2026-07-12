@@ -1,10 +1,11 @@
 import { createClient } from './supabase';
 
-let cachedToken: string | null = null;
+let cachedTokens: Record<string, string> = {};
 let inflight: Promise<string> | null = null;
 
-export async function getLiveKitToken(forceNew = false, role?: string, userId?: string | null): Promise<string> {
-  if (!forceNew && cachedToken) return cachedToken;
+export async function getLiveKitToken(forceNew = false, role?: string, userId?: string | null, sessionId?: string | null): Promise<string> {
+  const cacheKey = sessionId || 'default';
+  if (!forceNew && cachedTokens[cacheKey]) return cachedTokens[cacheKey];
   if (inflight) return inflight;
 
   inflight = (async () => {
@@ -28,6 +29,7 @@ export async function getLiveKitToken(forceNew = false, role?: string, userId?: 
     if (currentRole) params.append('role', currentRole);
     if (currentUserId) params.append('user_id', currentUserId);
     if (panelSize) params.append('panel_size', panelSize);
+    if (sessionId) params.append('session_id', sessionId);
 
     const qs = params.toString() ? `?${params.toString()}` : '';
     const CONVFLOW = process.env.NEXT_PUBLIC_CONVFLOW_URL || 'http://localhost:8001';
@@ -37,7 +39,7 @@ export async function getLiveKitToken(forceNew = false, role?: string, userId?: 
     if (!res.ok) throw new Error('Failed to fetch livekit token');
     const body = await res.json();
     const token = (body && typeof body === 'object' && 'token' in body) ? (body as any).token : body;
-    cachedToken = token as string;
+    cachedTokens[cacheKey] = token as string;
     inflight = null;
     return token as string;
   })();
@@ -49,11 +51,15 @@ export async function getLiveKitToken(forceNew = false, role?: string, userId?: 
   }
 }
 
-export function clearLiveKitToken() {
-  cachedToken = null;
+export function clearLiveKitToken(sessionId?: string) {
+  if (sessionId) {
+    delete cachedTokens[sessionId];
+  } else {
+    cachedTokens = {};
+  }
   inflight = null;
 }
 
-export function hasLiveKitToken() {
-  return !!cachedToken;
+export function hasLiveKitToken(sessionId?: string) {
+  return !!(sessionId ? cachedTokens[sessionId] : Object.keys(cachedTokens).length > 0);
 }

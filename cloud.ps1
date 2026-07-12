@@ -71,25 +71,10 @@ try {
     Write-Host "  Docker is not running. Skipping container cleanup." -ForegroundColor DarkGray
 }
 # 
-# Step 1: Start Vision Server (port 8000)
+# Step 1: Start ConvFlow Backend (port 8001)
 # 
 Write-Host ""
-Write-Host "[1/3] Starting Vision Server (port 8000)..." -ForegroundColor Cyan
-if (Test-PortInUse -Port 8000) {
-    Write-Host "  Vision Server already running on port 8000. Skipping." -ForegroundColor Yellow
-} else {
-    Start-ServiceWindow `
-        -Title "Vision Server - Cloud" `
-        -WorkingDirectory "$ProjectRoot\Vision" `
-        -Command "conda run --no-capture-output -n $CondaEnv uvicorn vision_server:app --host 0.0.0.0 --port 8000"
-}
-
-Start-Sleep -Seconds 2
-
-# 
-# Step 2: Start ConvFlow Backend (port 8001)
-# 
-Write-Host "[2/3] Starting ConvFlow Backend (port 8001  LiveKit Cloud)..." -ForegroundColor Cyan
+Write-Host "[1/3] Starting ConvFlow Backend (port 8001  LiveKit Cloud)..." -ForegroundColor Cyan
 if (Test-PortInUse -Port 8001) {
     Write-Host "  ConvFlow already running on port 8001. Skipping." -ForegroundColor Yellow
 } else {
@@ -102,10 +87,10 @@ if (Test-PortInUse -Port 8001) {
 Start-Sleep -Seconds 2
 
 # 
-# Step 3: Start Frontend Dev Server (port 3000)
+# Step 2: Start Frontend Dev Server (port 3000)
 # 
 if ($RunFrontend) {
-    Write-Host "[3/3] Starting Frontend Dev Server (port 3000)..." -ForegroundColor Cyan
+    Write-Host "[2/2] Starting Frontend Dev Server (port 3000)..." -ForegroundColor Cyan
     if (Test-PortInUse -Port 3000) {
         Write-Host "  Frontend already running on port 3000. Skipping." -ForegroundColor Yellow
     } else {
@@ -115,7 +100,7 @@ if ($RunFrontend) {
             -Command "npm run dev"
     }
 } else {
-    Write-Host "[3/3] Skipping frontend (default for cloud mode). Run with --RunFrontend to enable." -ForegroundColor DarkGray
+    Write-Host "[2/2] Skipping frontend (default for cloud mode). Run with --RunFrontend to enable." -ForegroundColor DarkGray
 }
 
 # 
@@ -147,7 +132,6 @@ Write-Host "" -ForegroundColor Green
 Write-Host "  All services launched successfully!" -ForegroundColor Green
 Write-Host "" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Vision Server:  http://localhost:8000" -ForegroundColor White
 Write-Host "  ConvFlow:       http://localhost:8001    LiveKit Cloud" -ForegroundColor White
 if ($RunFrontend) {
     Write-Host "  Frontend:       http://localhost:3000" -ForegroundColor White

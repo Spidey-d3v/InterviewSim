@@ -22,6 +22,7 @@ const PDFDownloadLink = dynamicImport(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
   { ssr: false }
 );
+import { getVideoLocal } from '../../../../utils/videoStorage';
 
 interface SessionDrawerProps {
   session: any;
@@ -31,6 +32,26 @@ interface SessionDrawerProps {
 export default function SessionDrawer({ session, onClose }: SessionDrawerProps) {
   const [showVocabModal, setShowVocabModal] = useState(false);
   const [showLengthModal, setShowLengthModal] = useState(false);
+  const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  React.useEffect(() => {
+    if (session?.session_id) {
+      getVideoLocal(session.session_id).then(blob => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          setVideoUrl(url);
+        }
+      });
+      fetch(`/api/timeline/${session.session_id}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.events) setTimelineEvents(data.events);
+        })
+        .catch(err => console.error(err));
+    }
+  }, [session?.session_id]);
 
   if (!session) return null;
 
@@ -150,6 +171,76 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-12">
+
+          {/* AI Telemetry Timeline */}
+          <section>
+            <div className="flex items-center gap-2 mb-6">
+              <Zap size={18} className="text-yellow-500" />
+              <h3 className="text-lg font-bold tracking-tight uppercase">AI Telemetry Timeline</h3>
+            </div>
+            
+            <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-8">
+              {/* Local Video Player */}
+              <div className="w-full aspect-video bg-[#050505] rounded-2xl border border-white/10 mb-8 flex items-center justify-center relative overflow-hidden shadow-2xl shadow-black/50">
+                 {videoUrl ? (
+                   <video 
+                     ref={videoRef}
+                     src={videoUrl} 
+                     controls 
+                     className="w-full h-full object-contain"
+                   />
+                 ) : (
+                   <>
+                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 z-10" />
+                     <div className="z-20 text-center">
+                       <p className="text-gray-700 font-bold tracking-[0.3em] text-sm mb-2">NO LOCAL VIDEO</p>
+                       <p className="text-gray-800 text-[10px] uppercase font-bold">Video not found in browser IndexedDB cache</p>
+                     </div>
+                   </>
+                 )}
+              </div>
+
+              {/* YouTube-Style Scrub Bar */}
+              <div className="relative">
+                <div className="relative w-full h-3 bg-white/5 rounded-full overflow-visible">
+                  <div className="absolute inset-y-0 left-0 w-1/3 bg-white/10 rounded-full" /> {/* Buffer bar */}
+                  {timelineEvents.map((evt) => {
+                     if (!evt.is_red_flag) return null;
+                     
+                     // Fallback max time to 3 mins if events don't span long enough
+                     const maxTime = Math.max(...timelineEvents.map(e => e.timestamp_seconds), 180);
+                     const leftPercent = Math.min((evt.timestamp_seconds / maxTime) * 100, 99);
+                     
+                     return (
+                       <div 
+                         key={evt.id}
+                         onClick={() => {
+                           if (videoRef.current) {
+                             videoRef.current.currentTime = evt.timestamp_seconds;
+                             videoRef.current.play();
+                           }
+                         }}
+                         className="absolute top-0 bottom-0 w-2 bg-red-500 rounded-full group cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.5)] z-20 hover:scale-125 transition-transform"
+                         style={{ left: `${leftPercent}%` }}
+                       >
+                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 backdrop-blur-md text-red-100 text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap border border-red-500/30 z-30">
+                            <span className="text-red-500 mr-2">●</span>
+                            {evt.metric_type === 'SPEECH' ? 'Severe Speech Stutter Detected' : 'Darting Gaze / Anxiety Detected'}
+                          </div>
+                       </div>
+                     );
+                  })}
+                </div>
+                <div className="mt-4 flex justify-between items-center text-[10px] font-bold text-gray-500 tracking-widest">
+                  <span>00:00</span>
+                  <div className="flex gap-4">
+                     <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]"></span> Red Flag</span>
+                  </div>
+                  <span>END</span>
+                </div>
+              </div>
+            </div>
+          </section>
 
           {/* V2 Feedback (Observations & Actions) */}
           {v2Feedback?.version === 2 && (

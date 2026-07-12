@@ -112,12 +112,12 @@ async def main():
                 continue
                 
             try:
-                # Ensure correct color conversion so L2CS-Net receives proper BGR (not corrupted ARG)
+                # Ensure correct color conversion so L2CS-Net receives proper BGR
                 video_frame = frame.frame if hasattr(frame, 'frame') else frame
-                rgba_frame = video_frame.convert(rtc.VideoBufferType.RGBA)
-                arr = np.frombuffer(rgba_frame.data, dtype=np.uint8)
-                img_rgba = arr.reshape((rgba_frame.height, rgba_frame.width, 4))
-                img_bgr = cv2.cvtColor(img_rgba, cv2.COLOR_RGBA2BGR)
+                rgb_frame = video_frame.convert(rtc.VideoBufferType.RGB24)
+                arr = np.frombuffer(rgb_frame.data, dtype=np.uint8).reshape((rgb_frame.height, rgb_frame.width, 3))
+                # RGB24 -> Convert to BGR for OpenCV
+                img_bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
                 
                 result = analyzer.analyze_frame(img_bgr, frame_index, fps, score_history)
                 chunk_frames.append(result)
@@ -146,4 +146,13 @@ async def main():
         await room.disconnect()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print("\n\nCRITICAL ERROR! The Vision Agent Crashed.")
+        print("Please take a screenshot of this error for debugging.")
+        input("Press Enter to close this window...")
+        import sys
+        sys.exit(1)
