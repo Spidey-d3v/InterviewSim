@@ -55,7 +55,13 @@ class WhisperSTT:
             skip_special_tokens=True
         )[0]
 
-        return text.strip()
+        import re
+        text = text.strip()
+        # Compress hallucinated repeating sequences of 1-4 chars without spaces
+        # e.g. "M.M.M.M.M.M.M." -> "M.M.M."
+        text = re.sub(r'(\S{1,4}?)\1{10,}', r'\1\1\1', text)
+
+        return text
 
     async def transcribe_async(self, audio: np.ndarray) -> str:
         async with _gpu_lock:

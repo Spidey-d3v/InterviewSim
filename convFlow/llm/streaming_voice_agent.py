@@ -116,7 +116,13 @@ class StreamingVoiceAgent:
                 
                 voice, chunk = item
 
-                for audio_chunk in self.tts.synthesize(chunk, voice=voice):
+                def run_tts():
+                    # Evaluate the generator completely in the background thread
+                    return list(self.tts.synthesize(chunk, voice=voice))
+
+                audio_chunks = await asyncio.to_thread(run_tts)
+
+                for audio_chunk in audio_chunks:
                     if not self.first_audio_emitted:
                         now = asyncio.get_event_loop().time()
                         print(f"⏱ First Audio Latency: {now - self.turn_start:.3f}s")

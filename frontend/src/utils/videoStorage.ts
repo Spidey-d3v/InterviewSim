@@ -44,3 +44,19 @@ export async function getVideoLocal(sessionId: string): Promise<Blob | null> {
     return null;
   }
 }
+
+export async function getAllLocalVideoSessions(): Promise<string[]> {
+  try {
+    const db = await getDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAllKeys();
+      req.onsuccess = () => resolve((req.result as string[]) || []);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.error("Failed to fetch local video sessions:", e);
+    return [];
+  }
+}

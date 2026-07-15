@@ -46,6 +46,7 @@ export default function InterviewRoom() {
   const questionContextRef = useRef({ questionIndex: 0, questionText: 'Introduce yourself.', phase: 'intro' });
   const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string; phase: string }>>({});
   const candidateAnswerMapRef = useRef<Record<number, string>>({});
+  const candidateDurationMapRef = useRef<Record<number, number>>({});
 
   // -- Component State --
   const [recordingTime, setRecordingTime] = useState(0);
@@ -58,6 +59,12 @@ export default function InterviewRoom() {
   const [permissionStatus, setPermissionStatus] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isPaused, setIsPaused] = useState(false);
+
+  // -- Dev Mode (Mock Video) --
+  const [devMode, setDevMode] = useState(false);
+  const [savedSessions, setSavedSessions] = useState<string[]>([]);
+  const [selectedMockSession, setSelectedMockSession] = useState<string>('');
+  const mockVideoRef = useRef<HTMLVideoElement>(null);
 
   // -- AI Conversation State --
   const [aiQuestions, setAiQuestions] = useState<string[]>([]);
@@ -110,12 +117,46 @@ export default function InterviewRoom() {
     }
   }, []);
 
+  useEffect(() => {
+    import('../../utils/videoStorage').then(m => m.getAllLocalVideoSessions().then(setSavedSessions));
+  }, []);
+
   const releaseStream = useCallback(() => {
     if (cameraStream) {
       cameraStream.getTracks().forEach(t => t.stop());
       setCameraStream(null);
     }
   }, [cameraStream]);
+
+  const loadMockStream = useCallback(async (sessionId: string) => {
+    try {
+      const { getVideoLocal } = await import('../../utils/videoStorage');
+      const blob = await getVideoLocal(sessionId);
+      if (!blob) throw new Error("Video not found");
+      
+      const videoEl = mockVideoRef.current;
+      if (!videoEl) return;
+      
+      videoEl.src = URL.createObjectURL(blob);
+      videoEl.loop = false;
+      videoEl.muted = false;
+      await new Promise((resolve) => {
+        videoEl.onloadedmetadata = resolve;
+      });
+      
+      const captureStream = (videoEl as any).captureStream || (videoEl as any).mozCaptureStream;
+      if (captureStream) {
+        const stream = captureStream.call(videoEl);
+        releaseStream();
+        setCameraStream(stream);
+        setPermissionStatus('granted');
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        videoEl.pause();
+      }
+    } catch(e) {
+      console.error(e);
+    }
+  }, [releaseStream]);
 
   const startRecorder = () => {};
   const stopRecorder = () => {};
@@ -176,9 +217,13 @@ export default function InterviewRoom() {
     }
   }, []);
 
-  const handleTurnEnd = useCallback((transcript?: string) => {
+  const handleTurnEnd = useCallback((transcript?: string, audioDurationSec?: number) => {
     flushChunk();
     if (transcript) candidateAnswerMapRef.current[questionContextRef.current.questionIndex] = transcript;
+    if (audioDurationSec) {
+      const qIndex = questionContextRef.current.questionIndex;
+      candidateDurationMapRef.current[qIndex] = (candidateDurationMapRef.current[qIndex] || 0) + audioDurationSec;
+    }
     if (interviewStarted) {
       setStreamingQuestion(null);
       setActiveQuestionStreamId(null);
@@ -198,6 +243,7 @@ export default function InterviewRoom() {
           question_index: qCtx.question_index,
           question_text: qCtx.question_text,
           candidate_answer: candidateAnswerMapRef.current[qCtx.question_index],
+          candidate_audio_duration: candidateDurationMapRef.current[qCtx.question_index] || 0,
           phase: qCtx.phase,
           chunks: [],
           question_averages: { wpm: null, focus: null },
@@ -228,6 +274,7 @@ export default function InterviewRoom() {
           // Fallback if we didn't get chunk context, we use the answer but might miss the exact question text
           question_text: aiQuestions[qIndex] || 'Unknown Question', 
           candidate_answer: answer,
+          candidate_audio_duration: candidateDurationMapRef.current[qIndex] || 0,
           phase: 'unknown',
           chunks: [],
           question_averages: { wpm: null, focus: null },
@@ -237,6 +284,9 @@ export default function InterviewRoom() {
         const existing = grouped.get(qIndex);
         if (existing && !existing.candidate_answer) {
           existing.candidate_answer = answer;
+        }
+        if (existing && !existing.candidate_audio_duration) {
+          existing.candidate_audio_duration = candidateDurationMapRef.current[qIndex] || 0;
         }
       }
     });
@@ -411,10 +461,12 @@ export default function InterviewRoom() {
 
     if (nextPaused) {
       console.log("⏸ Interview Paused");
+      mockVideoRef.current?.pause();
       if (isChunkRecording) stopRecorder();
       await sendData({ event: 'pause' });
     } else {
       console.log("▶️ Interview Resumed");
+      mockVideoRef.current?.play();
       if (cameraStream) startRecorder(cameraStream);
       // Repeat question if it hasn't been answered yet
       await sendData({ event: 'repeat_question' });
@@ -423,6 +475,29 @@ export default function InterviewRoom() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-[#0a0a0f] text-white flex flex-col overflow-hidden">
+      {!interviewStarted && (
+        <div className="absolute top-4 right-4 z-[999] bg-black/80 p-4 rounded-lg border border-white/10 shadow-lg">
+          <label className="flex items-center space-x-2 text-sm cursor-pointer font-bold text-blue-400">
+            <input type="checkbox" checked={devMode} onChange={e => setDevMode(e.target.checked)} className="accent-blue-500" />
+            <span>Dev Mode (Mock Video)</span>
+          </label>
+          {devMode && (
+            <select 
+              className="mt-3 bg-gray-900 text-xs p-2 rounded w-full border border-gray-700 text-gray-300"
+              value={selectedMockSession}
+              onChange={e => {
+                setSelectedMockSession(e.target.value);
+                if (e.target.value) loadMockStream(e.target.value);
+              }}
+            >
+              <option value="">Select previous session...</option>
+              {savedSessions.map(s => <option key={s} value={s}>{s.substring(0, 8)}...</option>)}
+            </select>
+          )}
+        </div>
+      )}
+      <video ref={mockVideoRef} className="hidden" crossOrigin="anonymous" playsInline />
+
       {showPreFlight && (
         <PreFlightCheck onComplete={() => setShowPreFlight(false)} />
       )}
@@ -436,6 +511,7 @@ export default function InterviewRoom() {
             setInterviewStartedAt(new Date().toISOString());
             containerRef.current?.requestFullscreen();
             if (cameraStream) startRecorder(cameraStream);
+            if (devMode && mockVideoRef.current) mockVideoRef.current.play();
           }}
           onCalibrate={() => { }} calibrated={true} screenCalibrated={true}
         />

@@ -65,8 +65,9 @@ async def main_async(url: str, token: str, session_id: str) -> None:
     shutdown_event = asyncio.Event()
     buffer_tasks: dict[str, asyncio.Task[None]] = {}
     
-    # Store when the room started to calculate accurate timeline seconds
-    start_time = asyncio.get_event_loop().time()
+    # We will lock in start_time the exact moment the first frame arrives
+    # to perfectly sync with the frontend's local video recorder.
+    room_state = {"start_time": None}
 
     logger.info("Initializing AI Analyzers (this may take a few seconds)...")
     speech_analyzer = SpeechAnalyzer()
@@ -97,6 +98,9 @@ async def main_async(url: str, token: str, session_id: str) -> None:
                 if frame_counter % 3 != 0:
                     continue
                 
+                if room_state["start_time"] is None:
+                    room_state["start_time"] = asyncio.get_event_loop().time()
+                    
                 frame = event.frame
                 video_frame = frame.frame if hasattr(frame, 'frame') else frame
                 arr = np.frombuffer(video_frame.data, dtype=np.uint8).reshape((video_frame.height, video_frame.width, 3))
@@ -104,7 +108,7 @@ async def main_async(url: str, token: str, session_id: str) -> None:
                 vision_result = vision_analyzer.process_frame(arr)
                 
                 current_time = asyncio.get_event_loop().time()
-                elapsed_seconds = current_time - start_time
+                elapsed_seconds = current_time - room_state["start_time"]
                 
                 # Accumulate gaze data for frontend
                 chunk_frames.append({
@@ -202,30 +206,32 @@ async def main_async(url: str, token: str, session_id: str) -> None:
                 frame = event.frame
                 sample_rate = frame.sample_rate
                 
-                audio_array = np.frombuffer(frame.data, dtype=np.int16).astype(np.float32) / 32768.0
-                
                 # If stereo, average channels to mono
-                if hasattr(frame, 'num_channels') and frame.num_channels > 1:
-                    audio_array = audio_array.reshape(-1, frame.num_channels).mean(axis=1)
+                if room_state["start_time"] is None:
+                    room_state["start_time"] = asyncio.get_event_loop().time()
 
+                audio_array = np.frombuffer(frame.data, dtype=np.int16).astype(np.float32) / 32768.0
+                if frame.num_channels > 1:
+                    audio_array = audio_array.reshape(-1, frame.num_channels).mean(axis=1)
+                    
                 audio_buffer.append(audio_array)
                 
                 # Collect exactly 3 seconds of audio for Wav2Vec2
                 total_samples = sum(len(a) for a in audio_buffer)
-                if total_samples >= sample_rate * 3:
+                if total_samples >= 3 * 16000:
                     full_audio = np.concatenate(audio_buffer)
-                    
-                    # Decimate to 16000Hz if the stream is 48000Hz (LiveKit default)
-                    if sample_rate >= 48000:
-                        ratio = sample_rate // 16000
+                    # Resample if needed
+                    if frame.sample_rate != 16000:
+                        ratio = frame.sample_rate // 16000
                         full_audio = full_audio[::ratio]
                         
-                    try:
+                    if len(full_audio) > 0:
                         speech_result = speech_analyzer.process_chunk(full_audio)
-                    except Exception as e:
-                        logger.error(f"Speech Analyzer error: {e}")
-                        speech_result = {"status": "ERROR", "label": "FLUENT", "confidence": 1.0, "is_red_flag": False}
-                    logger.info("Audio Telemetry", extra={"result": speech_result})
+                        
+                        current_time = asyncio.get_event_loop().time()
+                        elapsed_seconds = current_time - room_state["start_time"]
+                        
+                        logger.info("Audio Telemetry", extra={"result": speech_result})
                     
                     await save_telemetry(
                         session_id=room.name,
@@ -254,6 +260,17 @@ async def main_async(url: str, token: str, session_id: str) -> None:
             "participant disconnected",
             extra={"room": room.name, "participant": participant.identity},
         )
+        # Cancel all tasks associated with this participant
+        for track_sid, pub in participant.track_publications.items():
+            if track_sid in buffer_tasks:
+                logger.info(f"Cancelling task for disconnected participant's track {track_sid}")
+                buffer_tasks[track_sid].cancel()
+                del buffer_tasks[track_sid]
+        
+        # If this is the browser-user, we should shutdown the timeline agent
+        if participant.identity == "browser-user":
+            logger.info("Main browser-user disconnected. Shutting down timeline agent.")
+            shutdown_event.set()
 
     def on_track_subscribed(
         track: rtc.Track,
@@ -299,6 +316,10 @@ async def main_async(url: str, token: str, session_id: str) -> None:
                 "track_sid": publication.sid,
             },
         )
+        if publication.sid in buffer_tasks:
+            logger.info(f"Cancelling task for unsubscribed track {publication.sid}")
+            buffer_tasks[publication.sid].cancel()
+            del buffer_tasks[publication.sid]
         task = buffer_tasks.pop(publication.sid, None)
         if task is not None:
             task.cancel()

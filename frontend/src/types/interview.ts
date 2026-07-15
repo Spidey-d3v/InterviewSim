@@ -25,6 +25,7 @@ export type PersistedQuestionMetric = {
   question_index: number;
   question_text: string;
   candidate_answer: string;
+  candidate_audio_duration?: number;
   phase?: string;
   chunks: PersistedChunkMetric[];
   question_averages: {

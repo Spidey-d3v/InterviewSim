@@ -87,6 +87,7 @@ class QuestionMetricModel(BaseModel):
     question_index: int
     question_text: str
     candidate_answer: Optional[str] = ""
+    candidate_audio_duration: Optional[float] = 0.0
     chunks: list[ChunkMetricModel] = Field(default_factory=list)
 
 
@@ -1020,7 +1021,8 @@ async def handle_audio(track: rtc.RemoteAudioTrack, room_name: str):
                         json.dumps({
                             "event": "turn_end", 
                             "ts": time.time(),
-                            "transcript": transcript  # Added transcript text
+                            "transcript": transcript,  # Added transcript text
+                            "audio_duration_sec": len(buffer.get_full_turn_audio()) / buffer.sample_rate
                         }).encode(),
                         reliable=True,
                     )

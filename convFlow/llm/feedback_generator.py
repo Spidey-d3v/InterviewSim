@@ -21,7 +21,13 @@ def generate_v2_feedback(metrics_data: list, total_questions: int, total_chunks:
     metrics_json_str = json.dumps(metrics_data, indent=2)
     
     total_words = sum(len(q.get("candidate_answer", "").split()) for q in metrics_data)
-    total_minutes = (total_chunks * 15) / 60.0  # Chunks are 15 seconds each
+    
+    total_speaking_seconds = sum(q.get("candidate_audio_duration", 0.0) or 0.0 for q in metrics_data)
+    if total_speaking_seconds > 0.0:
+        total_minutes = total_speaking_seconds / 60.0
+    else:
+        total_minutes = (total_chunks * 15) / 60.0  # Fallback
+        
     calculated_wpm = int(total_words / total_minutes) if total_minutes > 0 else 0
 
     prompt = f"""
@@ -40,7 +46,7 @@ CRITICAL: ONLY count filler words ("um", "uh", "like") that EXACTLY appear in th
 
 New Metric Instructions:
 1. Response Length: Evaluate if their answers were concise (good), rambling (bad), or too short (bad). Provide a brief explanation of the ideal length for their specific answers.
-2. Vocabulary: Count weak words ("I think", "maybe", "I tried") vs strong words ("I led", "I delivered", "I achieved") in the transcript. Provide the exact list of strong and weak words you found.
+2. Vocabulary: Count weak words ("I think", "maybe", "I tried") vs strong words ("I led", "I delivered", "I achieved") in the transcript. Provide the exact list of strong and weak words you found along with their occurrence counts.
 3. Technical Evaluation: You are an extremely strict, expert technical interviewer. For each question asked, evaluate the technical correctness and quality of the candidate's answer. Give a score out of 5. Your explanation should be detailed but concise (2-3 sentences). If the candidate made any technical errors or gave an incorrect description, you MUST provide the exact, correct technical definition or solution in your explanation. Be unapologetically strict about technical accuracy.
 4. STAR Method Analysis: Evaluate how much focus the candidate put on each component of the STAR method across their answers. Output a percentage breakdown (0-100) for Situation, Task, Action, and Result. The total should equal 100.
 5. Skipped Questions: If the candidate's answer is a request to skip the question (e.g., 'Can we skip this phase please?', 'Skip this'), DO NOT penalize them for it. Do not recommend avoiding skipping in the actions. Simply ignore these skipped questions when assessing technical correctness, response length, and vocabulary.
@@ -64,8 +70,8 @@ You MUST return STRICT JSON adhering EXACTLY to the following schema:
       "strong_words_used": number, 
       "weak_words_used": number, 
       "status": "confident" | "passive",
-      "strong_words_list": ["string"],
-      "weak_words_list": ["string"]
+      "strong_words_list": [{{"word": "string", "count": number}}],
+      "weak_words_list": [{{"word": "string", "count": number}}]
     }},
     "star_coverage": {{
       "situation": number,

@@ -20,7 +20,7 @@ interface NewQuestionMeta {
 }
 
 interface UseConvFlowRoomOptions {
-  onTurnEnd: (transcript?: string) => void;
+  onTurnEnd: (transcript?: string, audioDurationSec?: number) => void;
   onInterviewEnd?: (scores: Record<string, unknown>) => void;
   onNewQuestion?: (text: string, meta?: NewQuestionMeta) => void;
   onGazeMetrics?: (data: any) => void;
@@ -97,7 +97,10 @@ export function useConvFlowRoom({
         
         if (event === "turn_end") {
           console.log("📡 turn_end received — triggering video flush");
-          onTurnEndRef.current(typeof msg.transcript === 'string' ? msg.transcript : undefined);
+          onTurnEndRef.current(
+            typeof msg.transcript === 'string' ? msg.transcript : undefined,
+            typeof msg.audio_duration_sec === 'number' ? msg.audio_duration_sec : undefined
+          );
         }
 
         if (event === "interview_end") {

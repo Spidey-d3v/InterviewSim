@@ -447,7 +447,7 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                    {q.candidate_answer && (
                      <div className="mt-4 pt-4 border-t border-white/5">
                         <p className="text-[10px] font-bold uppercase text-gray-500 mb-2 tracking-widest">Candidate Answer</p>
-                        <p className="text-sm text-gray-400 leading-relaxed italic">
+                        <p className="text-sm text-gray-400 italic mt-2 p-3 bg-[#13131a] rounded border border-[#2a2a35] whitespace-pre-wrap break-words">
                           "{highlightFillerWords(q.candidate_answer)}"
                         </p>
                      </div>
@@ -566,8 +566,10 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
               <div>
                 <p className="text-sm font-bold text-emerald-400 mb-3">Strong Words Used ({v2Feedback.observations.vocabulary.strong_words_used || 0})</p>
                 <div className="flex flex-wrap gap-2">
-                  {(v2Feedback.observations.vocabulary.strong_words_list || []).map((w: string, i: number) => (
-                    <span key={i} className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold rounded-lg">{w}</span>
+                  {(v2Feedback.observations.vocabulary.strong_words_list || []).map((w: any, i: number) => (
+                    <span key={i} className="px-2 py-1 bg-green-500/10 text-green-400 rounded-full text-xs font-mono">
+                      {typeof w === 'string' ? w : `${w.word} x${w.count}`}
+                    </span>
                   ))}
                   {(!v2Feedback.observations.vocabulary.strong_words_list || v2Feedback.observations.vocabulary.strong_words_list.length === 0) && <span className="text-gray-500 text-xs italic">No strong words detected in the transcript.</span>}
                 </div>
@@ -575,8 +577,10 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
               <div className="border-t border-white/5 pt-4">
                 <p className="text-sm font-bold text-red-400 mb-3">Weak Words Used ({v2Feedback.observations.vocabulary.weak_words_used || 0})</p>
                 <div className="flex flex-wrap gap-2">
-                  {(v2Feedback.observations.vocabulary.weak_words_list || []).map((w: string, i: number) => (
-                    <span key={i} className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold rounded-lg">{w}</span>
+                  {(v2Feedback.observations.vocabulary.weak_words_list || []).map((w: any, i: number) => (
+                    <span key={i} className="px-2 py-1 bg-red-500/10 text-red-400 rounded-full text-xs font-mono">
+                      {typeof w === 'string' ? w : `${w.word} x${w.count}`}
+                    </span>
                   ))}
                   {(!v2Feedback.observations.vocabulary.weak_words_list || v2Feedback.observations.vocabulary.weak_words_list.length === 0) && <span className="text-gray-500 text-xs italic">No weak words detected. Great job!</span>}
                 </div>
@@ -622,7 +626,7 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                         {wordCount} words
                       </span>
                     </div>
-                    <p className="text-sm text-gray-400 italic line-clamp-3 hover:line-clamp-none transition-all">"{q.candidate_answer || 'No answer recorded.'}"</p>
+                    <p className="text-sm text-gray-400 italic line-clamp-3 hover:line-clamp-none transition-all whitespace-pre-wrap break-words">"{q.candidate_answer || 'No answer recorded.'}"</p>
                   </div>
                 );
               })}

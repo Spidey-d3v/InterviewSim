@@ -138,10 +138,10 @@ class VisionAnalyzer:
                 history_list = list(self.gaze_history)
                 shift_count = 0
                 for i in range(1, len(history_list)):
-                    if abs(history_list[i] - history_list[i-1]) > 0.08:
+                    if abs(history_list[i] - history_list[i-1]) > 0.12:
                         shift_count += 1
                         
-                if shift_count >= 6: 
+                if shift_count >= 8: 
                     result["eye_status"] = "NERVOUS (Darting)"
                     result["is_red_flag_eye"] = True
             
