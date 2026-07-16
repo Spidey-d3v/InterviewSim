@@ -44,9 +44,9 @@ class SpeechAnalyzer:
             confidence = top['score']
             
             is_red_flag = False
-            # VERY forgiving threshold for red markings on timeline
+            # We are using frontend telemetry, so disable old aggressive stutter flags
             if stutter_label != 'FLUENT' and confidence > 0.80:
-                is_red_flag = True
+                is_red_flag = False
             else:
                 stutter_label = 'FLUENT'
                 

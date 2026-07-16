@@ -249,6 +249,58 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                 <Target size={18} className="text-purple-500" />
                 <h3 className="text-lg font-bold tracking-tight uppercase">Performance Observations</h3>
               </div>
+
+              {v2Feedback.observations.telemetry && (
+                <div className="mb-6 p-6 bg-white/[0.02] border border-white/5 rounded-3xl">
+                  <div className="mb-6">
+                    <h4 className="text-sm font-bold text-gray-200 tracking-tight uppercase">Empathy & Acoustic Telemetry</h4>
+                    <p className="text-xs text-gray-500 mt-1">{v2Feedback.observations.telemetry.body_language_feedback || 'Advanced analysis of your microexpressions and vocal stability.'}</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {/* Smile */}
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-gray-400">Enthusiasm (Smile)</span>
+                        <span className="text-emerald-400">{Math.round((v2Feedback.observations.telemetry.smile_average || 0) * 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500" style={{ width: `${Math.min(100, (v2Feedback.observations.telemetry.smile_average || 0) * 100)}%` }} />
+                      </div>
+                    </div>
+                    {/* Frown */}
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-gray-400">Stress (Frown)</span>
+                        <span className="text-yellow-400">{Math.round((v2Feedback.observations.telemetry.frown_average || 0) * 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-yellow-500" style={{ width: `${Math.min(100, (v2Feedback.observations.telemetry.frown_average || 0) * 100)}%` }} />
+                      </div>
+                    </div>
+                    {/* Darting */}
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-gray-400">Gaze Anxiety (Darting)</span>
+                        <span className="text-red-400">{Math.round((v2Feedback.observations.telemetry.darting_average || 0) * 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-red-500" style={{ width: `${Math.min(100, (v2Feedback.observations.telemetry.darting_average || 0) * 100)}%` }} />
+                      </div>
+                    </div>
+                    {/* Shakiness */}
+                    <div>
+                      <div className="flex justify-between text-xs font-bold mb-1">
+                        <span className="text-gray-400">Vocal Instability (Shaky Tone)</span>
+                        <span className="text-orange-400">{Math.round((v2Feedback.observations.telemetry.shakiness_average || 0) * 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, (v2Feedback.observations.telemetry.shakiness_average || 0) * 100)}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">

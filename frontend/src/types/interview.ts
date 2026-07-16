@@ -31,6 +31,12 @@ export type PersistedQuestionMetric = {
   question_averages: {
     wpm: number | null;
     focus: number | null;
+    telemetry?: {
+      gazeDarting: number;
+      smile: number;
+      frown: number;
+      volumeVariance: number;
+    } | null;
   };
 };
 

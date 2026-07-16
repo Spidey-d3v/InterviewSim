@@ -10,8 +10,8 @@ import { useConvFlowRoom } from '../hooks/useConvFlowRoom';
 import PreFlightCheck from './interview/PreFlightCheck';
 import CalibrationFlow from './CalibrationFlow';
 import ResultsModal from './interview/ResultsModal';
-import AnalyticsPanel from './interview/AnalyticsPanel';
 import { InterviewHeader, InterviewMainDisplay, InterviewControls } from './interview/InterviewUI';
+import { useTelemetry } from '../hooks/useTelemetry';
 
 // Types & Utils
 import {
@@ -47,6 +47,9 @@ export default function InterviewRoom() {
   const chunkQuestionMapRef = useRef<Record<string, { question_index: number; question_text: string; phase: string }>>({});
   const candidateAnswerMapRef = useRef<Record<number, string>>({});
   const candidateDurationMapRef = useRef<Record<number, number>>({});
+  
+  const telemetryAccRef = useRef({ gazeDarting: 0, smile: 0, frown: 0, volumeVariance: 0, count: 0 });
+  const questionTelemetryMapRef = useRef<Record<number, any>>({});
 
   // -- Component State --
   const [recordingTime, setRecordingTime] = useState(0);
@@ -106,6 +109,19 @@ export default function InterviewRoom() {
 
   // -- Start Local Video Recording --
   useLocalVideoRecorder(cameraStream, interviewStarted && !isPaused, interviewSessionId);
+  
+  // -- Frontend Telemetry (Replaces Backend Video Analytics) --
+  const telemetry = useTelemetry(cameraStream, interviewStarted && !isPaused);
+
+  useEffect(() => {
+    if (telemetry.isSpeaking) {
+      telemetryAccRef.current.gazeDarting += telemetry.gazeDarting;
+      telemetryAccRef.current.smile += telemetry.smile;
+      telemetryAccRef.current.frown += telemetry.frown;
+      telemetryAccRef.current.volumeVariance += telemetry.volumeVariance;
+      telemetryAccRef.current.count += 1;
+    }
+  }, [telemetry]);
   
   const requestPermissions = useCallback(async () => {
     try {
@@ -223,6 +239,15 @@ export default function InterviewRoom() {
     if (audioDurationSec) {
       const qIndex = questionContextRef.current.questionIndex;
       candidateDurationMapRef.current[qIndex] = (candidateDurationMapRef.current[qIndex] || 0) + audioDurationSec;
+      
+      const count = telemetryAccRef.current.count || 1;
+      questionTelemetryMapRef.current[qIndex] = {
+        gazeDarting: telemetryAccRef.current.gazeDarting / count,
+        smile: telemetryAccRef.current.smile / count,
+        frown: telemetryAccRef.current.frown / count,
+        volumeVariance: telemetryAccRef.current.volumeVariance / count,
+      };
+      telemetryAccRef.current = { gazeDarting: 0, smile: 0, frown: 0, volumeVariance: 0, count: 0 };
     }
     if (interviewStarted) {
       setStreamingQuestion(null);
@@ -246,7 +271,11 @@ export default function InterviewRoom() {
           candidate_audio_duration: candidateDurationMapRef.current[qCtx.question_index] || 0,
           phase: qCtx.phase,
           chunks: [],
-          question_averages: { wpm: null, focus: null },
+          question_averages: { 
+            wpm: null, 
+            focus: null,
+            telemetry: questionTelemetryMapRef.current[qCtx.question_index] || null
+          },
         });
       }
 
@@ -277,7 +306,11 @@ export default function InterviewRoom() {
           candidate_audio_duration: candidateDurationMapRef.current[qIndex] || 0,
           phase: 'unknown',
           chunks: [],
-          question_averages: { wpm: null, focus: null },
+          question_averages: { 
+            wpm: null, 
+            focus: null,
+            telemetry: questionTelemetryMapRef.current[qIndex] || null
+          },
         });
       } else {
         // Just make sure the answer is set in case it wasn't yet

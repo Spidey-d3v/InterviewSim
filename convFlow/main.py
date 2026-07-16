@@ -82,6 +82,16 @@ class ChunkMetricModel(BaseModel):
     confidence_score: Optional[float] = None
     gaze_distribution: GazeDistributionModel = Field(default_factory=GazeDistributionModel)
 
+class TelemetryModel(BaseModel):
+    gazeDarting: Optional[float] = 0.0
+    smile: Optional[float] = 0.0
+    frown: Optional[float] = 0.0
+    volumeVariance: Optional[float] = 0.0
+
+class QuestionAveragesModel(BaseModel):
+    wpm: Optional[float] = None
+    focus: Optional[float] = None
+    telemetry: Optional[TelemetryModel] = None
 
 class QuestionMetricModel(BaseModel):
     question_index: int
@@ -89,6 +99,7 @@ class QuestionMetricModel(BaseModel):
     candidate_answer: Optional[str] = ""
     candidate_audio_duration: Optional[float] = 0.0
     chunks: list[ChunkMetricModel] = Field(default_factory=list)
+    question_averages: Optional[QuestionAveragesModel] = None
 
 
 class FinalizeInterviewSessionPayload(BaseModel):
