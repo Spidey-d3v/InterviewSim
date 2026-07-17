@@ -18,6 +18,13 @@ export interface TelemetryData {
   isSpeaking: boolean;
 }
 
+export interface FrontendTimelineEvent {
+  timestamp_seconds: number;
+  metric_type: string;
+  is_red_flag: boolean;
+  raw_data_json: any;
+}
+
 export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
   const [telemetry, setTelemetry] = useState<TelemetryData>({
     gazeDarting: 0, smile: 0, frown: 0, volumeVariance: 0, isSpeaking: false
@@ -34,6 +41,10 @@ export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
   // Audio state refs
   const prevVolumeRef = useRef(0);
   const volumeVarianceEmaRef = useRef(0);
+  const zcrHistoryRef = useRef<number[]>([]);
+  const tremorHistoryRef = useRef<number[]>([]);
+  const lastTremorEventTime = useRef(0);
+  const timelineEventsRef = useRef<FrontendTimelineEvent[]>([]);
 
   // Initialize MediaPipe Vision Tasks
   useEffect(() => {
@@ -68,6 +79,7 @@ export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
     // 1. Audio setup
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     const audioCtx = new AudioContextClass();
+    audioCtx.resume().catch(e => console.warn('AudioContext resume failed:', e));
     const analyser = audioCtx.createAnalyser();
     analyser.fftSize = 1024;
     
@@ -164,27 +176,55 @@ export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
         analyser.getFloatTimeDomainData(dataArray);
         
         let sumSquares = 0.0;
+        let zeroCrossings = 0;
         for (let i = 0; i < dataArray.length; i++) {
           sumSquares += dataArray[i] * dataArray[i];
+          if (i > 0) {
+             if ((dataArray[i] >= 0 && dataArray[i-1] < 0) || (dataArray[i] < 0 && dataArray[i-1] >= 0)) {
+                 zeroCrossings++;
+             }
+          }
         }
         const rms = Math.sqrt(sumSquares / dataArray.length);
         
-        isSpeaking = rms > 0.02;
+        isSpeaking = rms > 0.01;
         
         if (isSpeaking) {
           const variance = Math.abs(rms - prevVolumeRef.current);
           volumeVarianceEmaRef.current = volumeVarianceEmaRef.current * 0.9 + variance * 0.1;
+          
+          // Strict Voice Crack and Tremor Detection
+          zcrHistoryRef.current.push(zeroCrossings);
+          if (zcrHistoryRef.current.length > 30) zcrHistoryRef.current.shift();
+          
+          const avgZcr = zcrHistoryRef.current.reduce((a, b) => a + b, 0) / zcrHistoryRef.current.length;
+          const zcrCrack = avgZcr > 100 && zeroCrossings > avgZcr * 1.8; // Sharp zero-crossing spike (crack)
+          const sustainedTremor = volumeVarianceEmaRef.current > 0.02 && variance > 0.04;
+          
+          const now = performance.now() / 1000;
+          if ((zcrCrack || sustainedTremor) && (now - lastTremorEventTime.current > 10.0)) { // Strict 10s cooldown
+              lastTremorEventTime.current = now;
+              timelineEventsRef.current.push({
+                  timestamp_seconds: videoEl?.currentTime || 0,
+                  metric_type: 'FRONTEND_SPEECH',
+                  is_red_flag: true,
+                  raw_data_json: { zcrCrack, sustainedTremor }
+              });
+          }
         } else {
           volumeVarianceEmaRef.current *= 0.95; 
         }
         prevVolumeRef.current = rms;
       }
 
+      const finalDarting = Math.min(1, dartingEmaRef.current * 4);
+      const finalShaky = Math.min(1, volumeVarianceEmaRef.current * 80);
+
       setTelemetry({
-        gazeDarting: Math.min(1, dartingEmaRef.current * 20),
-        smile: Math.min(1, smileEmaRef.current * 1.5), 
-        frown: Math.min(1, frownEmaRef.current * 1.5),
-        volumeVariance: Math.min(1, volumeVarianceEmaRef.current * 50),
+        gazeDarting: finalDarting,
+        smile: Math.min(1, smileEmaRef.current * 6), 
+        frown: Math.min(1, frownEmaRef.current * 10),
+        volumeVariance: finalShaky,
         isSpeaking
       });
 
@@ -192,13 +232,9 @@ export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
     }
 
     if (videoEl) {
-      videoEl.onloadeddata = () => {
-        videoEl?.play().catch(e => console.warn("video play error:", e));
-        requestAnimationFrame(processFrame);
-      };
-    } else {
-      requestAnimationFrame(processFrame);
+      videoEl.play().catch(e => console.warn("video play error:", e));
     }
+    requestAnimationFrame(processFrame);
 
     return () => {
       cancelAnimationFrame(animationFrameId);
@@ -210,5 +246,5 @@ export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
     };
   }, [stream, isActive]);
 
-  return telemetry;
+  return { telemetry, timelineEventsRef };
 }

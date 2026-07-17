@@ -40,7 +40,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from database import get_db, SessionLocal
-from models import Profile, InterviewSession
+from models import Profile, InterviewSession, InterviewTimeline
 import uuid
 
 from pathlib import Path
@@ -102,12 +102,19 @@ class QuestionMetricModel(BaseModel):
     question_averages: Optional[QuestionAveragesModel] = None
 
 
+class TimelineEventModel(BaseModel):
+    timestamp_seconds: float
+    metric_type: str
+    is_red_flag: bool = True
+    raw_data_json: dict = Field(default_factory=dict)
+
 class FinalizeInterviewSessionPayload(BaseModel):
     session_id: str
     user_id: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
     question_metrics_json: list[QuestionMetricModel] = Field(default_factory=list)
+    timeline_events: list[TimelineEventModel] = Field(default_factory=list)
     llm_evaluation_json: Optional[dict] = None
 
 
@@ -835,6 +842,22 @@ async def finalize_interview_session(
                 session.llm_evaluation_json = payload.llm_evaluation_json
                 
             db.commit()
+            
+            if payload.timeline_events:
+                timeline_records = []
+                for evt in payload.timeline_events:
+                    timeline_records.append(
+                        InterviewTimeline(
+                            session_id=payload.session_id,
+                            timestamp_seconds=evt.timestamp_seconds,
+                            metric_type=evt.metric_type,
+                            is_red_flag=evt.is_red_flag,
+                            raw_data_json=evt.raw_data_json
+                        )
+                    )
+                db.bulk_save_objects(timeline_records)
+                db.commit()
+                
         except Exception as db_err:
             db.rollback()
             raise db_err

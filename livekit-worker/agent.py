@@ -31,7 +31,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
-from ai_analyzer import SpeechAnalyzer, VisionAnalyzer
+from ai_analyzer import VisionAnalyzer
 from convFlow.database import SessionLocal
 from convFlow.models import InterviewTimeline
 
@@ -70,7 +70,6 @@ async def main_async(url: str, token: str, session_id: str) -> None:
     room_state = {"start_time": None}
 
     logger.info("Initializing AI Analyzers (this may take a few seconds)...")
-    speech_analyzer = SpeechAnalyzer()
     vision_analyzer = VisionAnalyzer()
     logger.info("AI Analyzers successfully loaded into VRAM/RAM.")
 
@@ -193,61 +192,7 @@ async def main_async(url: str, token: str, session_id: str) -> None:
         finally:
             await stream.aclose()
 
-    async def process_audio_track(
-        track: rtc.RemoteAudioTrack,
-        publication: rtc.RemoteTrackPublication,
-        participant: rtc.RemoteParticipant,
-    ) -> None:
-        stream = rtc.AudioStream(track)
-        audio_buffer = []
-        chunk_index = 0
-        try:
-            async for event in stream:
-                frame = event.frame
-                sample_rate = frame.sample_rate
-                
-                # If stereo, average channels to mono
-                if room_state["start_time"] is None:
-                    room_state["start_time"] = asyncio.get_event_loop().time()
 
-                audio_array = np.frombuffer(frame.data, dtype=np.int16).astype(np.float32) / 32768.0
-                if frame.num_channels > 1:
-                    audio_array = audio_array.reshape(-1, frame.num_channels).mean(axis=1)
-                    
-                audio_buffer.append(audio_array)
-                
-                # Collect exactly 3 seconds of audio for Wav2Vec2
-                total_samples = sum(len(a) for a in audio_buffer)
-                if total_samples >= 3 * 16000:
-                    full_audio = np.concatenate(audio_buffer)
-                    # Resample if needed
-                    if frame.sample_rate != 16000:
-                        ratio = frame.sample_rate // 16000
-                        full_audio = full_audio[::ratio]
-                        
-                    if len(full_audio) > 0:
-                        speech_result = speech_analyzer.process_chunk(full_audio)
-                        
-                        current_time = asyncio.get_event_loop().time()
-                        elapsed_seconds = current_time - room_state["start_time"]
-                        
-                        logger.info("Audio Telemetry", extra={"result": speech_result})
-                    
-                    await save_telemetry(
-                        session_id=room.name,
-                        timestamp=chunk_index * 3.0, # Exact timestamp
-                        metric_type="SPEECH",
-                        is_red=speech_result.get("is_red_flag", False),
-                        raw_data=speech_result
-                    )
-                    audio_buffer = []
-                    chunk_index += 1
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("audio track processing failed")
-        finally:
-            await stream.aclose()
 
     def on_participant_connected(participant: rtc.RemoteParticipant) -> None:
         logger.info(
@@ -295,13 +240,7 @@ async def main_async(url: str, token: str, session_id: str) -> None:
                     process_video_track(track, publication, participant)
                 )
             logger.info("video track ready for real-time AI processing", extra={"room": room.name})
-            
-        elif publication.kind == AUDIO_KIND and isinstance(track, rtc.RemoteAudioTrack):
-            if publication.sid not in buffer_tasks:
-                buffer_tasks[publication.sid] = asyncio.create_task(
-                    process_audio_track(track, publication, participant)
-                )
-            logger.info("audio track ready for AI processing", extra={"room": room.name})
+
 
     def on_track_unsubscribed(
         track: rtc.Track,

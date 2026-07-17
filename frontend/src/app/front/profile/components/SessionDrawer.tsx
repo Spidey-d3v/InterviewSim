@@ -34,6 +34,8 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
   const [showLengthModal, setShowLengthModal] = useState(false);
   const [timelineEvents, setTimelineEvents] = useState<any[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
   React.useEffect(() => {
@@ -188,6 +190,8 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                      src={videoUrl} 
                      controls 
                      className="w-full h-full object-contain"
+                     onTimeUpdate={() => setCurrentTime(videoRef.current?.currentTime || 0)}
+                     onLoadedMetadata={() => setVideoDuration(videoRef.current?.duration || 0)}
                    />
                  ) : (
                    <>
@@ -202,19 +206,45 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
 
               {/* YouTube-Style Scrub Bar */}
               <div className="relative">
-                <div className="relative w-full h-3 bg-white/5 rounded-full overflow-visible">
-                  <div className="absolute inset-y-0 left-0 w-1/3 bg-white/10 rounded-full" /> {/* Buffer bar */}
+                <div 
+                  className="relative w-full h-3 bg-white/5 rounded-full overflow-visible cursor-pointer hover:bg-white/10 transition-colors"
+                  onClick={(e) => {
+                    if (!videoRef.current) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const percent = (e.clientX - rect.left) / rect.width;
+                    const sessionDuration = session.completed_at && session.started_at 
+                      ? Math.max(1, (new Date(session.completed_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                      : Math.max(...timelineEvents.map(e => e.timestamp_seconds), 180);
+                    const duration = (isFinite(videoDuration) && videoDuration > 0) 
+                      ? videoDuration 
+                      : sessionDuration;
+                    videoRef.current.currentTime = percent * duration;
+                    videoRef.current.play();
+                  }}
+                >
+                  <div className="absolute inset-y-0 left-0 w-1/3 bg-white/10 rounded-full pointer-events-none" /> {/* Buffer bar */}
+                  <div 
+                    className="absolute inset-y-0 left-0 bg-red-500/50 rounded-full pointer-events-none transition-all duration-100 ease-linear" 
+                    style={{ 
+                      width: `${Math.min((currentTime / ((isFinite(videoDuration) && videoDuration > 0) ? videoDuration : (session.completed_at && session.started_at ? Math.max(1, (new Date(session.completed_at).getTime() - new Date(session.started_at).getTime()) / 1000) : Math.max(...timelineEvents.map(e => e.timestamp_seconds), 180)))) * 100, 100)}%` 
+                    }} 
+                  /> {/* Progress bar */}
                   {timelineEvents.map((evt) => {
                      if (!evt.is_red_flag) return null;
                      
-                     // Fallback max time to 3 mins if events don't span long enough
-                     const maxTime = Math.max(...timelineEvents.map(e => e.timestamp_seconds), 180);
-                     const leftPercent = Math.min((evt.timestamp_seconds / maxTime) * 100, 99);
+                     const sessionDuration = session.completed_at && session.started_at 
+                      ? Math.max(1, (new Date(session.completed_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                      : Math.max(...timelineEvents.map(e => e.timestamp_seconds), 180);
+                     const duration = (isFinite(videoDuration) && videoDuration > 0) 
+                      ? videoDuration 
+                      : sessionDuration;
+                     const leftPercent = Math.min((evt.timestamp_seconds / duration) * 100, 99);
                      
                      return (
                        <div 
                          key={evt.id}
-                         onClick={() => {
+                         onClick={(e) => {
+                           e.stopPropagation();
                            if (videoRef.current) {
                              videoRef.current.currentTime = evt.timestamp_seconds;
                              videoRef.current.play();
@@ -223,20 +253,31 @@ export default function SessionDrawer({ session, onClose }: SessionDrawerProps) 
                          className="absolute top-0 bottom-0 w-2 bg-red-500 rounded-full group cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.5)] z-20 hover:scale-125 transition-transform"
                          style={{ left: `${leftPercent}%` }}
                        >
-                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 backdrop-blur-md text-red-100 text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap border border-red-500/30 z-30">
+                          <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/90 backdrop-blur-md text-red-100 text-[10px] font-bold px-3 py-1.5 rounded-lg whitespace-nowrap border border-red-500/30 z-30 pointer-events-none">
                             <span className="text-red-500 mr-2">●</span>
-                            {evt.metric_type === 'SPEECH' ? 'Severe Speech Stutter Detected' : 'Darting Gaze / Anxiety Detected'}
+                            {evt.metric_type.includes('SPEECH') ? 'Severe Speech Stutter Detected' : 'Darting Gaze / Anxiety Detected'}
                           </div>
                        </div>
                      );
                   })}
                 </div>
                 <div className="mt-4 flex justify-between items-center text-[10px] font-bold text-gray-500 tracking-widest">
-                  <span>00:00</span>
+                  <span>
+                    {Math.floor(currentTime / 60).toString().padStart(2, '0')}:
+                    {Math.floor(currentTime % 60).toString().padStart(2, '0')}
+                  </span>
                   <div className="flex gap-4">
                      <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]"></span> Red Flag</span>
                   </div>
-                  <span>END</span>
+                  <span>
+                    {(() => {
+                      const sessionDuration = session.completed_at && session.started_at 
+                        ? Math.max(1, (new Date(session.completed_at).getTime() - new Date(session.started_at).getTime()) / 1000)
+                        : Math.max(...timelineEvents.map(e => e.timestamp_seconds), 180);
+                      const finalDur = (isFinite(videoDuration) && videoDuration > 0) ? videoDuration : sessionDuration;
+                      return finalDur > 0 ? `${Math.floor(finalDur / 60).toString().padStart(2, '0')}:${Math.floor(finalDur % 60).toString().padStart(2, '0')}` : 'END';
+                    })()}
+                  </span>
                 </div>
               </div>
             </div>

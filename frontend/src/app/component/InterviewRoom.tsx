@@ -111,17 +111,17 @@ export default function InterviewRoom() {
   useLocalVideoRecorder(cameraStream, interviewStarted && !isPaused, interviewSessionId);
   
   // -- Frontend Telemetry (Replaces Backend Video Analytics) --
-  const telemetry = useTelemetry(cameraStream, interviewStarted && !isPaused);
+  const { telemetry, timelineEventsRef } = useTelemetry(cameraStream, interviewStarted && !isPaused);
 
   useEffect(() => {
-    if (telemetry.isSpeaking) {
+    if (interviewStarted && !isPaused) {
       telemetryAccRef.current.gazeDarting += telemetry.gazeDarting;
       telemetryAccRef.current.smile += telemetry.smile;
       telemetryAccRef.current.frown += telemetry.frown;
       telemetryAccRef.current.volumeVariance += telemetry.volumeVariance;
       telemetryAccRef.current.count += 1;
     }
-  }, [telemetry]);
+  }, [telemetry, interviewStarted, isPaused]);
   
   const requestPermissions = useCallback(async () => {
     try {
@@ -358,6 +358,12 @@ export default function InterviewRoom() {
       m.question_averages = {
         wpm: wpmVal,
         focus: focusVal,
+        telemetry: {
+          gazeDarting: telemetryAccRef.current.count > 0 ? telemetryAccRef.current.gazeDarting / telemetryAccRef.current.count : 0,
+          smile: telemetryAccRef.current.count > 0 ? telemetryAccRef.current.smile / telemetryAccRef.current.count : 0,
+          frown: telemetryAccRef.current.count > 0 ? telemetryAccRef.current.frown / telemetryAccRef.current.count : 0,
+          volumeVariance: telemetryAccRef.current.count > 0 ? telemetryAccRef.current.volumeVariance / telemetryAccRef.current.count : 0,
+        }
       };
     });
 
@@ -389,6 +395,7 @@ export default function InterviewRoom() {
           started_at: interviewStartedAt,
           completed_at: new Date().toISOString(),
           question_metrics_json: metrics,
+          timeline_events: timelineEventsRef.current,
           llm_evaluation_json: finalScores,
         }),
       });

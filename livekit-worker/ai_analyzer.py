@@ -1,64 +1,7 @@
 import os
-import torch
 import numpy as np
 import mediapipe as mp
 from collections import deque
-from transformers import AutoFeatureExtractor, Wav2Vec2ForSequenceClassification
-
-class SpeechAnalyzer:
-    def __init__(self, sample_rate=16000):
-        self.sample_rate = sample_rate
-        # Load from project root/demos
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        model_path = os.path.join(base_dir, "demos", "wav2vec2_model")
-        
-        if not os.path.exists(model_path):
-            raise Exception(f"Wav2Vec2 model not found at {model_path}")
-            
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(model_path)
-        self.model = Wav2Vec2ForSequenceClassification.from_pretrained(model_path)
-        self.model.eval()
-
-    def process_chunk(self, audio_data: np.ndarray):
-        """
-        Processes a flat 1D numpy array of float32 audio samples.
-        Returns a dictionary with status and raw scores.
-        """
-        # Threshold to ignore silence/background noise
-        if np.abs(audio_data).mean() < 0.002:
-            return {"status": "SILENCE", "label": "FLUENT", "confidence": 1.0, "is_red_flag": False}
-
-        try:
-            inputs = self.feature_extractor(audio_data, sampling_rate=self.sample_rate, return_tensors="pt")
-            with torch.no_grad():
-                logits = self.model(**inputs).logits
-            probs = torch.nn.functional.softmax(logits, dim=-1)[0]
-            
-            results = []
-            for i in range(len(probs)):
-                results.append({"label": self.model.config.id2label[i], "score": probs[i].item()})
-            results = sorted(results, key=lambda x: x["score"], reverse=True)
-            
-            top = results[0]
-            stutter_label = top['label'].upper()
-            confidence = top['score']
-            
-            is_red_flag = False
-            # We are using frontend telemetry, so disable old aggressive stutter flags
-            if stutter_label != 'FLUENT' and confidence > 0.80:
-                is_red_flag = False
-            else:
-                stutter_label = 'FLUENT'
-                
-            return {
-                "status": "SPEECH",
-                "label": stutter_label,
-                "confidence": float(confidence),
-                "is_red_flag": is_red_flag,
-                "raw_scores": results
-            }
-        except Exception as e:
-            return {"status": "ERROR", "error": str(e)}
 
 class VisionAnalyzer:
     def __init__(self):
