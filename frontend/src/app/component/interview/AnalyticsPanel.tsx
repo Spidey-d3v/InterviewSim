@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import { type ChunkResult } from '../../hooks/useVisionSession';
-import { getChunkGazeCounts } from '../../../utils/interview-metrics';
+import { type ChunkResult, getChunkGazeCounts } from '../../../utils/interview-metrics';
 
 interface AnalyticsPanelProps {
   isVisible: boolean;

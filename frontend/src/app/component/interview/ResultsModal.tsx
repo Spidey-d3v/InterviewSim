@@ -3,7 +3,7 @@
 import React, { useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { jsPDF } from 'jspdf';
-import { type ChunkResult } from '../../hooks/useVisionSession';
+import { type ChunkResult } from '../../../utils/interview-metrics';
 import { 
   type PersistedQuestionMetric, 
   type InterviewPhaseScores 

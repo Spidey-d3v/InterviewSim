@@ -2,7 +2,15 @@
  * Utility Functions for Interview Metrics & Calculations
  */
 
-import { type ChunkResult, type GazeLogEntry } from '../app/hooks/useVisionSession';
+export interface GazeLogEntry {
+  timestamp: number;
+  status: string;
+  frame_score?: number;
+}
+export interface ChunkResult {
+  chunkId: string;
+  gaze_data: GazeLogEntry[];
+}
 import { type GazeDistribution } from '../types/interview';
 
 /**

@@ -335,8 +335,8 @@ export default function InterviewRoom() {
         cr => (chunkQuestionMapRef.current[cr.chunkId]?.question_index || 0) === m.question_index
       );
 
-      rawChunksForQuestion.forEach(cr => {
-        cr.gaze_data.forEach(g => {
+      rawChunksForQuestion.forEach((cr: any) => {
+        cr.gaze_data.forEach((g: any) => {
           if (g.frame_score !== undefined) {
             sumFrameScore += g.frame_score;
             countFrameScore++;
