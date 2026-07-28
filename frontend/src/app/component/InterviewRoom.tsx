@@ -514,7 +514,7 @@ export default function InterviewRoom() {
   }, [isPaused, isChunkRecording, stopRecorder, startRecorder, cameraStream, sendData]);
 
   return (
-    <div ref={containerRef} className="min-h-screen bg-[#0a0a0f] text-white flex flex-col overflow-hidden">
+    <div ref={containerRef} className="h-screen w-screen max-h-screen max-w-screen bg-[#0a0a0f] text-white flex flex-col overflow-hidden">
       {!interviewStarted && (
         <div className="absolute top-4 right-4 z-[999] bg-black/80 p-4 rounded-lg border border-white/10 shadow-lg">
           <label className="flex items-center space-x-2 text-sm cursor-pointer font-bold text-blue-400">
