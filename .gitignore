@@ -35,7 +35,7 @@ build/
 
 # Project Specific Data & Models
 Atempt2/checkpoints/
-Vision/data/
+Vision/
 Vision/models/*.pkl
 
 # Audio & Video

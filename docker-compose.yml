@@ -1,61 +1,93 @@
-services:
-  # Redis - shared by LiveKit (signaling) and Celery (job queue)
-  redis:
-    image: redis:7-alpine
-    container_name: interview-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    command: redis-server --appendonly yes --maxmemory 4gb --maxmemory-policy allkeys-lru
-    restart: unless-stopped
-    networks:
-      - interview-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
+version: '3.8'
 
-  # LiveKit Server - WebRTC media server
+services:
+  db:
+    image: postgres:14-alpine
+    container_name: lattice-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_password_here # CHANGE THIS
+      POSTGRES_DB: lattice
+    ports:
+      - "4321:5432" # Maps host port 4321 to container's 5432, as per your README
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - lattice-network
+    restart: unless-stopped
+
   livekit:
     image: livekit/livekit-server:latest
-    container_name: interview-livekit
-    ports:
-      # WebRTC signaling
-      - "7880:7880"
-      # TURN server (optional)
-      - "7881:7881"
-      # RTC port range for media
-      - "50000-50100:50000-50100/udp"
+    container_name: lattice-livekit
+    command: --config /livekit.yaml
     volumes:
       - ./livekit.yaml:/livekit.yaml:ro
-    command: --config /livekit.yaml
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
     environment:
-      # Override Redis connection if needed
-      # LIVEKIT_REDIS_ADDRESS: redis:6379
-      
-      # Set production API secret (REPLACE WITH SECURE VALUE!)
-      LIVEKIT_KEYS: "devkey: APISECRETdevkey1234567890ABCDEFG"
-      
-      # Logging
-      LIVEKIT_LOG_LEVEL: info
-    depends_on:
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+      # LiveKit keys. Without Redis, it uses local memory.
+      - LIVEKIT_KEYS=devkey:APISECRETdevkey1234567890ABCDEFG # CHANGE THIS
     networks:
-      - interview-network
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7880"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
+      - lattice-network
+    restart: unless-stopped
+
+  convflow:
+    build:
+      context: ./convFlow
+      dockerfile: Dockerfile
+    container_name: lattice-convflow
+    ports:
+      - "8000:8000"
+    environment:
+      # Use 'db' hostname instead of localhost to connect to postgres container
+      - DATABASE_URL=postgresql://postgres:your_password_here@db:5432/lattice
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=APISECRETdevkey1234567890ABCDEFG
+      # Note: Make sure to pass your other keys (GEMINI_API_KEY, SUPABASE) here or via a .env file
+    depends_on:
+      - db
+    networks:
+      - lattice-network
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./livekit-worker
+      dockerfile: Dockerfile
+    container_name: lattice-worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:your_password_here@db:5432/lattice
+      - LIVEKIT_URL=ws://livekit:7880
+      - LIVEKIT_API_KEY=devkey
+      - LIVEKIT_API_SECRET=APISECRETdevkey1234567890ABCDEFG
+    depends_on:
+      - db
+      - livekit
+    networks:
+      - lattice-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lattice-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # CRITICAL: When deploying, change these localhost URLs to your server's public IP or Domain
+      - NEXT_PUBLIC_CONVFLOW_URL=http://localhost:8000
+      - NEXT_PUBLIC_LIVEKIT_URL=ws://localhost:7880
+    networks:
+      - lattice-network
+    restart: unless-stopped
 
 networks:
-  interview-network:
+  lattice-network:
     driver: bridge
 
 volumes:
-  redis-data:
-    driver: local
+  postgres-data:

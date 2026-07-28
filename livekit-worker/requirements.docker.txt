@@ -1,0 +1,8 @@
+livekit
+livekit-api
+numpy
+mediapipe
+python-dotenv
+certifi
+sqlalchemy
+psycopg2-binary
