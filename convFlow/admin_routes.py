@@ -47,6 +47,11 @@ def get_session(session_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
+@router.get("/sessions/{session_id}/timeline")
+def get_session_timeline(session_id: str, db: Session = Depends(get_db)):
+    events = db.query(models.InterviewTimeline).filter(models.InterviewTimeline.session_id == session_id).order_by(models.InterviewTimeline.timestamp_seconds.asc()).all()
+    return {"events": [{"id": str(e.id), "timestamp_seconds": e.timestamp_seconds, "metric_type": e.metric_type, "is_red_flag": e.is_red_flag, "raw_data_json": e.raw_data_json} for e in events]}
+
 # --- Prompts ---
 @router.get("/prompts")
 def get_prompts(db: Session = Depends(get_db)):

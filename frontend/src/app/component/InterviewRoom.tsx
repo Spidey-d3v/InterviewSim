@@ -174,7 +174,7 @@ export default function InterviewRoom() {
     }
   }, [releaseStream]);
 
-  const startRecorder = () => {};
+  const startRecorder = (stream?: any) => {};
   const stopRecorder = () => {};
   const flushChunk = () => {};
 
@@ -448,7 +448,7 @@ export default function InterviewRoom() {
     endingInterviewRef.current = false;
 
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+    supabase.auth.getUser().then(({ data }: any) => setCurrentUserId(data.user?.id ?? null));
     requestPermissions().then((s) => {
       if (s) { setPermissionStatus('granted'); if (videoRef.current) videoRef.current.srcObject = s; }
       else setPermissionStatus('denied');
