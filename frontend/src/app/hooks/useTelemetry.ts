@@ -220,6 +220,18 @@ export function useTelemetry(stream: MediaStream | null, isActive: boolean) {
       const finalDarting = Math.min(1, dartingEmaRef.current * 4);
       const finalShaky = Math.min(1, volumeVarianceEmaRef.current * 80);
 
+      // Vision gaze darting event
+      const nowGaze = performance.now() / 1000;
+      if (finalDarting > 0.7 && (nowGaze - lastTremorEventTime.current > 5.0)) {
+          lastTremorEventTime.current = nowGaze; // Use same cooldown timer to prevent spam
+          timelineEventsRef.current.push({
+              timestamp_seconds: videoEl?.currentTime || 0,
+              metric_type: 'FRONTEND_VISION_GAZE',
+              is_red_flag: true,
+              raw_data_json: { gazeDarting: finalDarting }
+          });
+      }
+
       setTelemetry({
         gazeDarting: finalDarting,
         smile: Math.min(1, smileEmaRef.current * 6), 

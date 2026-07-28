@@ -1,34 +1,23 @@
 'use client';
 
 import React from 'react';
-import { type ChunkResult, getChunkGazeCounts } from '../../../utils/interview-metrics';
+import { type TelemetryData } from '../hooks/useTelemetry';
 
 interface AnalyticsPanelProps {
   isVisible: boolean;
-  chunkResults: ChunkResult[];
-  pendingChunks: number;
-  pendingUploads: number;
+  telemetry: TelemetryData;
   isChunkRecording: boolean;
 }
 
 export default function AnalyticsPanel({
   isVisible,
-  chunkResults,
-  pendingChunks,
-  pendingUploads,
+  telemetry,
   isChunkRecording,
 }: AnalyticsPanelProps) {
   if (!isVisible) return null;
 
-  const gazeTotals = chunkResults.reduce(
-    (acc, c) => {
-      const counts = getChunkGazeCounts(c);
-      return { focused: acc.focused + counts.focused, total: acc.total + counts.total };
-    },
-    { focused: 0, total: 0 }
-  );
-
-  const focusPct = gazeTotals.total > 0 ? (gazeTotals.focused / gazeTotals.total) * 100 : null;
+  // focusPct: 100% when gazeDarting is 0, 0% when gazeDarting is 1
+  const focusPct = Math.max(0, Math.min(100, (1 - telemetry.gazeDarting) * 100));
 
   return (
     <div className="absolute right-6 top-6 bottom-24 w-80 bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-sm rounded-2xl border border-white/10 p-6 overflow-y-auto z-10">
@@ -43,9 +32,9 @@ export default function AnalyticsPanel({
         {/* Eye Contact */}
         <MetricSection
           label="Eye Contact"
-          value={focusPct !== null ? `${focusPct.toFixed(0)}%` : 'Tracking…'}
-          percent={focusPct ?? 0}
-          color="bg-purple-500"
+          value={`${focusPct.toFixed(0)}%`}
+          percent={focusPct}
+          color={focusPct > 80 ? "bg-green-500" : focusPct > 50 ? "bg-yellow-500" : "bg-red-500"}
         />
 
 
@@ -57,14 +46,12 @@ export default function AnalyticsPanel({
             </svg>
             <div>
               <p className="text-sm font-medium text-yellow-400 mb-1">
-                {chunkResults.length > 0 ? 'AI Analysis Active' : 'Tip'}
+                {isChunkRecording ? 'AI Tracking Active' : 'Tip'}
               </p>
               <p className="text-sm text-gray-400">
-                {chunkResults.length > 0
-                  ? `${chunkResults.length} chunks analyzed.${pendingUploads > 0 ? ` ${pendingUploads} uploading…` : ''}${pendingChunks > 0 ? ` ${pendingChunks} processing…` : ''}`
-                  : isChunkRecording
-                  ? 'Recording in progress. Scores appear after first turn.'
-                  : 'Complete calibration to begin.'}
+                {isChunkRecording
+                  ? (telemetry.gazeDarting > 0.6 ? 'Warning: Frequent looking away detected.' : 'Maintaining good eye contact.')
+                  : 'Waiting for interview to start...'}
               </p>
             </div>
           </div>

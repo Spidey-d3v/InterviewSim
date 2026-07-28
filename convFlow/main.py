@@ -285,7 +285,7 @@ RMS_SILENCE_THRESHOLD = 0.005
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://convflow.univeons.online"],
+    allow_origins=["http://localhost:3000", "https://convflow.univeons.online", "https://univeons-sigma.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
