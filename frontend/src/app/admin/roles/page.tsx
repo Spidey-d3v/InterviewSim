@@ -1,5 +1,4 @@
 import React from 'react';
-import pool from '@/utils/db';
 import RolesClient from './RolesClient';
 
 export const dynamic = 'force-dynamic';
@@ -9,8 +8,11 @@ export default async function RolesPage() {
   let errorMsg = null;
   
   try {
-    const res = await pool.query('SELECT * FROM job_roles ORDER BY created_at DESC');
-    roles = res.rows;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/roles`, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    roles = await res.json();
   } catch (err: any) {
     errorMsg = err.message;
   }

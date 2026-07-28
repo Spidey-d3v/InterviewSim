@@ -285,7 +285,7 @@ RMS_SILENCE_THRESHOLD = 0.005
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "https://convflow.univeons.online"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1183,3 +1183,6 @@ def admin_get_session(id: str, db: Session = Depends(get_db)):
             "resume_text": s.profile.resume_text if s.profile else None
         } if s.profile else None
     }
+
+from admin_routes import router as admin_router
+app.include_router(admin_router, prefix="/api/admin")

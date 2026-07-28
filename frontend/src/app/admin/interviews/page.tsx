@@ -1,6 +1,5 @@
 import React from 'react';
 import Link from 'next/link';
-import pool from '@/utils/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,14 +8,11 @@ export default async function InterviewsPage() {
   let errorMsg = null;
   
   try {
-    const query = `
-      SELECT s.*, p.full_name, p.email 
-      FROM interview_sessions s 
-      LEFT JOIN profiles p ON s.user_id = p.id 
-      ORDER BY s.created_at DESC
-    `;
-    const res = await pool.query(query);
-    sessions = res.rows;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/sessions`, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    sessions = await res.json();
   } catch (err: any) {
     errorMsg = err.message;
   }

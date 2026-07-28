@@ -1,5 +1,4 @@
 import React from 'react';
-import pool from '@/utils/db';
 import { Activity, Users, Target, Clock, ChevronRight, Sparkles, MessageSquareText, Briefcase, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 
@@ -10,8 +9,9 @@ export default async function AdminDashboard() {
   let errorMsg = null;
   
   try {
-    const res = await pool.query('SELECT * FROM interview_sessions ORDER BY created_at DESC');
-    sessions = res.rows;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/sessions`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('Failed to fetch sessions');
+    sessions = await res.json();
   } catch (err: any) {
     errorMsg = err.message;
   }

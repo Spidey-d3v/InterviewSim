@@ -1,6 +1,5 @@
 'use server';
 
-import pool from '@/utils/db';
 import { revalidatePath } from 'next/cache';
 
 export async function createRole(formData: FormData) {
@@ -8,18 +7,28 @@ export async function createRole(formData: FormData) {
   const description = formData.get('description') as string;
   const question_bank_json = formData.get('question_bank_json') as string || '[]';
 
+  let parsedBank = [];
   try {
-    JSON.parse(question_bank_json);
+    parsedBank = JSON.parse(question_bank_json);
   } catch (e) {
     return { error: 'Invalid JSON format for Question Bank' };
   }
 
   try {
-    await pool.query(
-      `INSERT INTO job_roles (id, role_name, description, panel_size, question_bank_json)
-       VALUES (gen_random_uuid(), $1, $2, 1, $3::jsonb)`,
-      [role_name, description, question_bank_json]
-    );
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/roles`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        role_name,
+        description,
+        question_bank_json: parsedBank
+      })
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     revalidatePath('/admin/roles');
     return { success: true };
   } catch (err: any) {
@@ -32,19 +41,28 @@ export async function updateRole(id: string, formData: FormData) {
   const description = formData.get('description') as string;
   const question_bank_json = formData.get('question_bank_json') as string || '[]';
 
+  let parsedBank = [];
   try {
-    JSON.parse(question_bank_json);
+    parsedBank = JSON.parse(question_bank_json);
   } catch (e) {
     return { error: 'Invalid JSON format for Question Bank' };
   }
 
   try {
-    await pool.query(
-      `UPDATE job_roles 
-       SET role_name = $1, description = $2, question_bank_json = $3::jsonb, updated_at = NOW()
-       WHERE id = $4`,
-      [role_name, description, question_bank_json, id]
-    );
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/roles/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        role_name,
+        description,
+        question_bank_json: parsedBank
+      })
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     revalidatePath('/admin/roles');
     return { success: true };
   } catch (err: any) {
@@ -54,7 +72,12 @@ export async function updateRole(id: string, formData: FormData) {
 
 export async function deleteRole(id: string) {
   try {
-    await pool.query('DELETE FROM job_roles WHERE id = $1', [id]);
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/roles/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     revalidatePath('/admin/roles');
     return { success: true };
   } catch (err: any) {

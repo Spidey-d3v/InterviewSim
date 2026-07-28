@@ -1,6 +1,5 @@
 import React from 'react';
 import Link from 'next/link';
-import pool from '@/utils/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,14 +11,11 @@ export default async function DossierPage({ params }: { params: Promise<{ id: st
   let errorMsg = null;
   
   try {
-    const query = `
-      SELECT s.*, p.full_name, p.email, p.resume_text 
-      FROM interview_sessions s 
-      LEFT JOIN profiles p ON s.user_id = p.id 
-      WHERE s.id = $1
-    `;
-    const res = await pool.query(query, [id]);
-    session = res.rows[0];
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/sessions/${id}`, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    session = await res.json();
   } catch (err: any) {
     errorMsg = err.message;
   }

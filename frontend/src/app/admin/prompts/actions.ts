@@ -1,16 +1,19 @@
 'use server';
 
-import pool from '@/utils/db';
 import { revalidatePath } from 'next/cache';
 
 export async function updatePrompt(id: string, prompt_text: string) {
   try {
-    await pool.query(
-      `UPDATE interview_prompts 
-       SET prompt_text = $1, updated_at = NOW()
-       WHERE id = $2`,
-      [prompt_text, id]
-    );
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/prompts/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ prompt_text })
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
     revalidatePath('/admin/prompts');
     return { success: true };
   } catch (err: any) {

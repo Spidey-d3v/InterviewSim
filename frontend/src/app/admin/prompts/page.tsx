@@ -1,5 +1,4 @@
 import React from 'react';
-import pool from '@/utils/db';
 import PromptsClient from './PromptsClient';
 
 export const dynamic = 'force-dynamic';
@@ -9,8 +8,11 @@ export default async function PromptsPage() {
   let errorMsg = null;
   
   try {
-    const res = await pool.query('SELECT * FROM interview_prompts ORDER BY prompt_key ASC');
-    prompts = res.rows;
+    const res = await fetch(`${process.env.NEXT_PUBLIC_CONVFLOW_URL}/api/admin/prompts`, { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    prompts = await res.json();
   } catch (err: any) {
     errorMsg = err.message;
   }
